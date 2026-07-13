@@ -16,6 +16,7 @@ public class RipOrchestrator : IHostedService, IDisposable
     private readonly ConcurrentQueue<(RipJob Job, string Device)> _pendingRips = new();
     private readonly ConcurrentQueue<RipJob> _processingQueue = new();
     private RipJob? _activeRip;
+    private RipJob? _activeProcessing;
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
     private readonly Lock _lock = new();
@@ -36,6 +37,12 @@ public class RipOrchestrator : IHostedService, IDisposable
     public IReadOnlyList<RipJob> ProcessingJobs
     {
         get { lock (_lock) return _processingQueue.ToList(); }
+    }
+
+    public RipJob? ActiveProcessing
+    {
+        get { lock (_lock) return _activeProcessing; }
+        private set { lock (_lock) _activeProcessing = value; }
     }
 
     public IEnumerable<(RipJob Job, string Device)> PendingRips
@@ -253,10 +260,12 @@ public class RipOrchestrator : IHostedService, IDisposable
         {
             await LogToJobAsync(job.Id, "Info", "Entered processing queue");
             await UpdateJobStatusAsync(job, RipStatus.QueuedForProcessing);
-            StateChanged?.Invoke();
 
             try
             {
+                ActiveProcessing = job;
+                StateChanged?.Invoke();
+
                 await UpdateJobStatusAsync(job, RipStatus.Transcoding);
                 StateChanged?.Invoke();
                 JobUpdated?.Invoke(job);
@@ -264,19 +273,14 @@ public class RipOrchestrator : IHostedService, IDisposable
                 using var scope = _scopeFactory.CreateScope();
                 var handbrake = scope.ServiceProvider.GetRequiredService<HandbrakeService>();
 
-                var preset = string.IsNullOrWhiteSpace(job.HandbrakePreset)
-                    ? "Very Fast 1080p30"
-                    : job.HandbrakePreset;
-
                 var mp4Path = await handbrake.TranscodeAsync(
                     job.MkvPath!,
                     job.OutputDir,
                     job.MovieName,
-                    preset,
+                    _settings.Current,
                     onProgress: (percent, fps) =>
                     {
                         job.ProcessingProgress = percent;
-                        _ = BroadcastAsync(job);
                         JobUpdated?.Invoke(job);
                     },
                     ct: CancellationToken.None);
@@ -304,6 +308,7 @@ public class RipOrchestrator : IHostedService, IDisposable
             }
             finally
             {
+                ActiveProcessing = null;
                 StateChanged?.Invoke();
                 JobUpdated?.Invoke(job);
             }

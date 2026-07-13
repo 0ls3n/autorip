@@ -32,6 +32,15 @@ public class SettingsService
             {
                 case "OutputDirectory": Current.OutputDirectory = entry.Value ?? Current.OutputDirectory; break;
                 case "HandbrakePreset": Current.HandbrakePreset = entry.Value ?? Current.HandbrakePreset; break;
+                case "UseCustomHandbrake": Current.UseCustomHandbrake = entry.Value == "true"; break;
+                case "HandbrakeEncoder": Current.HandbrakeEncoder = entry.Value ?? "x264"; break;
+                case "HandbrakeQuality": Current.HandbrakeQuality = double.TryParse(entry.Value, out var q) ? q : 22.0; break;
+                case "HandbrakeSpeed": Current.HandbrakeSpeed = entry.Value ?? "veryfast"; break;
+                case "HandbrakeWebOptimized": Current.HandbrakeWebOptimized = entry.Value != "false"; break;
+                case "HandbrakeAlignAv": Current.HandbrakeAlignAv = entry.Value != "false"; break;
+                case "HandbrakeMarkers": Current.HandbrakeMarkers = entry.Value != "false"; break;
+                case "HandbrakeFramerate": Current.HandbrakeFramerate = entry.Value ?? "source"; break;
+                case "HandbrakeCfr": Current.HandbrakeCfr = entry.Value == "true"; break;
                 case "AutoDeleteMkv": Current.AutoDeleteMkv = entry.Value == "true"; break;
                 case "ExtractAllSubtitles": Current.ExtractAllSubtitles = entry.Value == "true"; break;
                 case "PreferredSubtitleLanguages":
@@ -71,6 +80,15 @@ public class SettingsService
         {
             ["OutputDirectory"] = Current.OutputDirectory,
             ["HandbrakePreset"] = Current.HandbrakePreset,
+            ["UseCustomHandbrake"] = Current.UseCustomHandbrake.ToString().ToLower(),
+            ["HandbrakeEncoder"] = Current.HandbrakeEncoder,
+            ["HandbrakeQuality"] = Current.HandbrakeQuality.ToString("F1"),
+            ["HandbrakeSpeed"] = Current.HandbrakeSpeed,
+            ["HandbrakeWebOptimized"] = Current.HandbrakeWebOptimized.ToString().ToLower(),
+            ["HandbrakeAlignAv"] = Current.HandbrakeAlignAv.ToString().ToLower(),
+            ["HandbrakeMarkers"] = Current.HandbrakeMarkers.ToString().ToLower(),
+            ["HandbrakeFramerate"] = Current.HandbrakeFramerate,
+            ["HandbrakeCfr"] = Current.HandbrakeCfr.ToString().ToLower(),
             ["AutoDeleteMkv"] = Current.AutoDeleteMkv.ToString().ToLower(),
             ["ExtractAllSubtitles"] = Current.ExtractAllSubtitles.ToString().ToLower(),
             ["PreferredSubtitleLanguages"] = string.Join(",", Current.PreferredSubtitleLanguages),

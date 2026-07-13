@@ -292,6 +292,46 @@
         </div>
     }
 
+    @if (processingJob != null)
+    {
+        <div class="active-rip-section">
+            <h3 class="history-heading">Transcoding</h3>
+            <div class="card rip-progress-card @(procExpanded ? "rip-expanded" : "")"
+                 @onclick="() => procExpanded = !procExpanded">
+                <div class="rip-progress-header">
+                    <div class="rip-progress-title-row">
+                        <span class="rip-progress-title">@processingJob.MovieName</span>
+                        <span class="badge @StatusBadgeClass(processingJob.Status)">@processingJob.Status</span>
+                    </div>
+                    <span class="rip-expand-icon">@(procExpanded ? "▲" : "▼")</span>
+                </div>
+                <div class="progress-bar">
+                    @if (processingJob.ProcessingProgress > 0)
+                    {
+                        <div class="progress-fill" style="width: @processingJob.ProcessingProgress.ToString("F1")%"></div>
+                    }
+                    else
+                    {
+                        <div class="progress-fill progress-indeterminate"></div>
+                    }
+                </div>
+                <div class="progress-meta">
+                    <span>@processingJob.DiscLabel</span>
+                    <span>
+                        @if (processingJob.ProcessingProgress > 0)
+                        {
+                            @processingJob.ProcessingProgress.ToString("F1")<text>%</text>
+                        }
+                        else
+                        {
+                            <text>Starting…</text>
+                        }
+                    </span>
+                </div>
+            </div>
+        </div>
+    }
+
     @if (processingJobs.Count > 0)
     {
         <div class="processing-section">
@@ -378,7 +418,9 @@
     private List<RipJob> recentJobs = new();
     private RipJob? activeJob;
     private List<RipJob> processingJobs = new();
+    private RipJob? processingJob;
     private bool ripExpanded = true;
+    private bool procExpanded = true;
     private int _pollCount;
     private CancellationTokenSource? _pollCts;
 
@@ -431,6 +473,7 @@
     private void RefreshOrchestratorState()
     {
         activeJob = Orchestrator.ActiveRip;
+        processingJob = Orchestrator.ActiveProcessing;
         processingJobs = Orchestrator.ProcessingJobs.ToList();
     }
 

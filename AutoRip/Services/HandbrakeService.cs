@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using AutoRip.Models;
 
 namespace AutoRip.Services;
 
@@ -17,7 +18,7 @@ public class HandbrakeService
         string inputPath,
         string outputDir,
         string movieName,
-        string preset,
+        Settings settings,
         Action<double, double?>? onProgress = null,
         CancellationToken ct = default)
     {
@@ -25,16 +26,16 @@ public class HandbrakeService
         var outputPath = Path.Combine(outputDir, $"{safeName}.mp4");
         Directory.CreateDirectory(outputDir);
 
-        _logger.LogInformation("Transcoding: {In} → {Out} (preset: {Preset})", inputPath, outputPath, preset);
+        var args = BuildArgs(inputPath, outputPath, settings);
+        _logger.LogInformation("Transcoding: {In} → {Out} {Args}", inputPath, outputPath, args);
 
         var progressRegex = new Regex(@"Encoding: task \d+ of \d+, (\d+\.\d+) %");
         var fpsRegex = new Regex(@"\((\d+\.\d+) fps");
-
         int lastPercent = -1;
 
         var result = await _runner.RunWithProgressAsync(
             "HandBrakeCLI",
-            $"-i \"{inputPath}\" -o \"{outputPath}\" --preset \"{preset}\" --all-audio --audio-copy-mask ac3,aac,mp3,dts,dtshd,eac3,truehd,flac --audio-fallback ffac3",
+            args,
             onOutput: null,
             onError: line =>
             {
@@ -52,15 +53,12 @@ public class HandbrakeService
                         if (fpsMatch.Success)
                             fps = double.Parse(fpsMatch.Groups[1].Value,
                                 System.Globalization.CultureInfo.InvariantCulture);
-
                         onProgress?.Invoke(percent, fps);
                     }
                 }
             },
             ct: ct,
             timeout: TimeSpan.FromHours(12));
-
-        _logger.LogInformation("HandBrake exit={Code}", result.ExitCode);
 
         if (result.ExitCode != 0)
             throw new InvalidOperationException(
@@ -69,9 +67,56 @@ public class HandbrakeService
         if (!File.Exists(outputPath))
             throw new InvalidOperationException("Output .mp4 was not created");
 
-        var size = new FileInfo(outputPath).Length;
-        _logger.LogInformation("Transcode complete: {Path} ({Size} bytes)", outputPath, size);
+        _logger.LogInformation("Transcode complete: {Path}", outputPath);
         return outputPath;
+    }
+
+    private static string BuildArgs(string input, string output, Settings settings)
+    {
+        var audio = "--all-audio --audio-copy-mask ac3,aac,mp3,dts,dtshd,eac3,truehd,flac --audio-fallback ffac3";
+
+        string coreArgs;
+        if (settings.UseCustomHandbrake)
+        {
+            var encoder = settings.HandbrakeEncoder ?? "x264";
+            var quality = settings.HandbrakeQuality;
+            var speed = settings.HandbrakeSpeed ?? "veryfast";
+            coreArgs = $"-e {encoder} -q {quality:F1} --encoder-preset {speed}";
+        }
+        else
+        {
+            var preset = string.IsNullOrWhiteSpace(settings.HandbrakePreset)
+                ? "Very Fast 1080p30"
+                : settings.HandbrakePreset;
+            coreArgs = $"--preset \"{preset}\"";
+        }
+
+        var flags = new List<string>();
+
+        if (settings.HandbrakeWebOptimized)
+            flags.Add("-O");
+        else
+            flags.Add("--no-optimize");
+
+        if (settings.HandbrakeAlignAv)
+            flags.Add("--align-av");
+
+        if (settings.HandbrakeMarkers)
+            flags.Add("-m");
+        else
+            flags.Add("--no-markers");
+
+        if (!string.IsNullOrWhiteSpace(settings.HandbrakeFramerate) &&
+            settings.HandbrakeFramerate != "source")
+            flags.Add($"-r {settings.HandbrakeFramerate}");
+
+        if (settings.HandbrakeCfr)
+            flags.Add("--cfr");
+        else
+            flags.Add("--vfr");
+
+        var extra = string.Join(" ", flags);
+        return $"-i \"{input}\" -o \"{output}\" {coreArgs} {audio} {extra}";
     }
 
     public async Task<List<string>> GetPresetsAsync()

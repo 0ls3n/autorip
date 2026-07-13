@@ -1,9 +1,9 @@
 @page "/settings"
 @using AutoRip.Models
+@using AutoRip.Services
 @inject SettingsService SettingsService
+@inject HandbrakeService HandbrakeService
 @inject NavigationManager Navigation
-
-@rendermode InteractiveServer
 
 <PageTitle>Settings — AutoRip</PageTitle>
 
@@ -21,10 +21,7 @@
             <div class="form-group">
                 <label for="tmdbApiKey">API Key</label>
                 <input id="tmdbApiKey" type="password" class="text-input" @bind="apiKey" placeholder="Paste your TMDB API key…" />
-                <p class="hint">
-                    Get a free key at
-                    <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a>
-                </p>
+                <p class="hint">Get a free key at <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a></p>
             </div>
 
             <div class="form-group">
@@ -32,6 +29,128 @@
                     <input type="checkbox" @bind="autoDetect" />
                     <span>Auto-identify discs when inserted</span>
                 </label>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>HandBrake Transcoding</h2>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" @bind="useCustom" />
+                    <span>Use custom encoder settings</span>
+                </label>
+            </div>
+
+            @if (!useCustom)
+            {
+                <div class="form-group">
+                    <label for="hbPreset">Preset</label>
+                    <div class="select-wrapper">
+                        <select id="hbPreset" class="text-input" @bind="selectedPreset">
+                            @if (presets.Count == 0)
+                            {
+                                <option value="">Loading…</option>
+                            }
+                            else
+                            {
+                                @foreach (var p in presets)
+                                {
+                                    <option value="@p">@p</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="form-group">
+                    <label for="hbEncoder">Encoder</label>
+                    <div class="select-wrapper">
+                        <select id="hbEncoder" class="text-input" @bind="selectedEncoder">
+                            @foreach (var e in encoderOptions)
+                            {
+                                <option value="@e">@e</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="hbQuality">Quality (RF): @quality.ToString("F1")</label>
+                    <input id="hbQuality" type="range" class="range-input" min="16" max="30" step="0.5" @bind="quality" @bind:event="oninput" />
+                    <p class="hint">Lower = better quality, larger file. 16–30 for H.264.</p>
+                </div>
+                <div class="form-group">
+                    <label for="hbSpeed">Encoder Speed</label>
+                    <div class="select-wrapper">
+                        <select id="hbSpeed" class="text-input" @bind="selectedSpeed">
+                            <option value="ultrafast">Ultrafast (worst compression)</option>
+                            <option value="superfast">Superfast</option>
+                            <option value="veryfast">Veryfast</option>
+                            <option value="faster">Faster</option>
+                            <option value="fast">Fast</option>
+                            <option value="medium">Medium (balanced)</option>
+                            <option value="slow">Slow</option>
+                            <option value="slower">Slower</option>
+                            <option value="veryslow">Veryslow (best compression)</option>
+                        </select>
+                    </div>
+                </div>
+            }
+
+            <hr class="card-divider" />
+            <h3 class="card-subheading">Advanced</h3>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" @bind="webOptimized" />
+                    <span>Web optimized (fast start)</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" @bind="alignAv" />
+                    <span>Align A/V start</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" @bind="chapterMarkers" />
+                    <span>Chapter markers</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label for="hbFramerate">Framerate</label>
+                <div class="select-wrapper">
+                    <select id="hbFramerate" class="text-input" @bind="framerate">
+                        <option value="source">Same as source</option>
+                        <option value="23.976">23.976</option>
+                        <option value="25">25</option>
+                        <option value="29.97">29.97</option>
+                        <option value="30">30</option>
+                        <option value="50">50</option>
+                        <option value="59.94">59.94</option>
+                        <option value="60">60</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Framerate mode</label>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="framerateMode" value="cfr" checked="@cfr" @onchange="() => cfr = true" />
+                        <span>Constant</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="framerateMode" value="vfr" checked="@(!cfr)" @onchange="() => cfr = false" />
+                        <span>Variable</span>
+                    </label>
+                </div>
             </div>
         </div>
 
@@ -68,7 +187,25 @@
     private bool autoDeleteMkv = true;
     private bool saved;
 
-    protected override void OnInitialized()
+    private bool useCustom;
+    private List<string> presets = new();
+    private string selectedPreset = "Very Fast 1080p30";
+    private string selectedEncoder = "x264";
+    private double quality = 22.0;
+    private string selectedSpeed = "veryfast";
+    private bool webOptimized = true;
+    private bool alignAv = true;
+    private bool chapterMarkers = true;
+    private string framerate = "source";
+    private bool cfr = false;
+
+    private static readonly string[] encoderOptions =
+    {
+        "x264", "x265", "x264_10bit", "x265_10bit", "x265_12bit",
+        "svt_av1", "nvenc_h264", "nvenc_h265"
+    };
+
+    protected override async Task OnInitializedAsync()
     {
         var settings = SettingsService.Current;
         if (settings != null)
@@ -77,7 +214,21 @@
             autoDetect = settings.UseTmdbAutoDetect;
             outputDir = settings.OutputDirectory;
             autoDeleteMkv = settings.AutoDeleteMkv;
+            useCustom = settings.UseCustomHandbrake;
+            selectedPreset = settings.HandbrakePreset;
+            selectedEncoder = settings.HandbrakeEncoder ?? "x264";
+            quality = settings.HandbrakeQuality;
+            selectedSpeed = settings.HandbrakeSpeed ?? "veryfast";
+            webOptimized = settings.HandbrakeWebOptimized;
+            alignAv = settings.HandbrakeAlignAv;
+            chapterMarkers = settings.HandbrakeMarkers;
+            framerate = settings.HandbrakeFramerate ?? "source";
+            cfr = settings.HandbrakeCfr;
         }
+
+        presets = await HandbrakeService.GetPresetsAsync();
+        if (!presets.Contains(selectedPreset) && presets.Count > 0)
+            selectedPreset = presets[0];
     }
 
     private async Task SaveSettings()
@@ -88,6 +239,16 @@
         SettingsService.Current.UseTmdbAutoDetect = autoDetect;
         SettingsService.Current.OutputDirectory = outputDir;
         SettingsService.Current.AutoDeleteMkv = autoDeleteMkv;
+        SettingsService.Current.UseCustomHandbrake = useCustom;
+        SettingsService.Current.HandbrakePreset = selectedPreset;
+        SettingsService.Current.HandbrakeEncoder = selectedEncoder;
+        SettingsService.Current.HandbrakeQuality = quality;
+        SettingsService.Current.HandbrakeSpeed = selectedSpeed;
+        SettingsService.Current.HandbrakeWebOptimized = webOptimized;
+        SettingsService.Current.HandbrakeAlignAv = alignAv;
+        SettingsService.Current.HandbrakeMarkers = chapterMarkers;
+        SettingsService.Current.HandbrakeFramerate = framerate;
+        SettingsService.Current.HandbrakeCfr = cfr;
 
         await SettingsService.SaveAsync();
 
