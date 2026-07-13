@@ -1,0 +1,526 @@
+.dashboard {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 40px 24px;
+}
+
+.dashboard-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 32px;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--text-primary);
+}
+
+.logo-accent {
+    color: var(--accent);
+}
+
+.dashboard-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.drive-card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.drive-card-active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-dim);
+}
+
+.drive-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+.drive-name-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.drive-device {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.drive-path {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+.drive-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.btn-eject,
+.btn-close-tray {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+}
+
+.btn-eject:hover,
+.btn-close-tray:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--accent);
+}
+
+.btn-eject:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.btn-eject.ejecting {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.spinner-sm {
+    width: 14px;
+    height: 14px;
+}
+
+.disc-details {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+    align-items: flex-start;
+}
+
+.poster {
+    width: 120px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+}
+
+.disc-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.disc-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+}
+
+.disc-title-row h2 {
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.year {
+    color: var(--text-secondary);
+    font-weight: 400;
+    font-size: 16px;
+}
+
+.disc-label {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.overview {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 14px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.movie-name-editor {
+    margin-bottom: 12px;
+}
+
+.movie-name-editor label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.input-row {
+    display: flex;
+    gap: 8px;
+}
+
+.tmdb-search {
+    margin-bottom: 14px;
+    padding: 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.tmdb-results {
+    list-style: none;
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.tmdb-result-item {
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background var(--transition);
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+}
+
+.tmdb-result-item:hover {
+    background: var(--bg-hover);
+}
+
+.tmdb-result-title {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.tmdb-result-year {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.no-results {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.disc-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.btn-rip {
+    padding: 8px 24px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.status-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.drive-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 24px 20px;
+    text-align: center;
+}
+
+.drive-icon-small {
+    font-size: 36px;
+    line-height: 1;
+    opacity: 0.3;
+}
+
+.drive-empty p {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.drive-status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 32px 20px;
+    text-align: center;
+}
+
+.drive-icon {
+    font-size: 48px;
+    line-height: 1;
+    opacity: 0.35;
+    margin-bottom: 4px;
+}
+
+.drive-status h2 {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.drive-status p {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.btn-secondary {
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all var(--transition);
+}
+
+.btn-secondary:hover {
+    color: var(--text-primary);
+    border-color: var(--accent);
+    background: var(--bg-hover);
+}
+
+.history-section {
+    margin-top: 40px;
+}
+
+.history-heading {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.history-card {
+    padding: 14px 18px;
+}
+
+.history-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.history-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.history-title {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.history-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.history-meta {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+
+.history-tmdb {
+    color: var(--accent);
+}
+
+.history-error {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--red);
+    background: rgba(255, 23, 68, 0.08);
+    padding: 6px 10px;
+    border-radius: 4px;
+}
+
+.active-rip-section,
+.processing-section {
+    margin-top: 24px;
+}
+
+.rip-progress-card {
+    padding: 18px 20px;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color var(--transition);
+}
+
+.rip-progress-card:hover {
+    border-color: var(--accent);
+}
+
+.rip-expanded {
+    border-color: var(--accent);
+}
+
+.rip-progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.rip-progress-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.rip-progress-title {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.rip-expand-icon {
+    font-size: 10px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.rip-details {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.rip-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.rip-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.rip-stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.rip-stat-value {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.rip-stat-value.mono {
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 400;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.btn-cancel {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    border: 1px solid rgba(255, 23, 68, 0.3);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--red);
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.btn-cancel:hover {
+    background: rgba(255, 23, 68, 0.1);
+    border-color: var(--red);
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    min-width: 0;
+}
+
+.progress-indeterminate {
+    width: 40%;
+    animation: progressSlide 1.5s ease-in-out infinite;
+}
+
+@keyframes progressSlide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+}
+
+.progress-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}

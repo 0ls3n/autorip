@@ -1,0 +1,624 @@
+@page "/"
+@using AutoRip.Models
+@using AutoRip.Services
+@inject TmdbService TmdbService
+@inject SettingsService SettingsService
+@inject RipHistoryService RipHistory
+@inject DriveService DriveService
+@inject RipOrchestrator Orchestrator
+@implements IAsyncDisposable
+
+<PageTitle>AutoRip</PageTitle>
+
+<div class="dashboard">
+    <header class="dashboard-header">
+        <h1 class="logo">AUTO<span class="logo-accent">RIP</span></h1>
+        <span style="color:var(--text-secondary);font-size:11px;font-family:monospace">poll:@_pollCount</span>
+        <a href="/settings" class="nav-link">Settings</a>
+    </header>
+
+    <div class="dashboard-content">
+        @if (!hasPolled)
+        {
+            <div class="card drive-card">
+                <div class="drive-status">
+                    <div class="spinner"></div>
+                    <p>Detecting drives…</p>
+                </div>
+            </div>
+        }
+        else if (drives.Count == 0)
+        {
+            <div class="card drive-card">
+                <div class="drive-status">
+                    <div class="drive-icon">💿</div>
+                    <h2>No Optical Drives</h2>
+                    <p>No optical drives detected on this system.</p>
+                </div>
+            </div>
+        }
+        else
+        {
+            @foreach (var drive in drives)
+            {
+                <div class="card drive-card @(drive.HasMedia ? "drive-card-active" : "")">
+                    <div class="drive-header">
+                        <div class="drive-name-row">
+                            <span class="drive-device">@drive.DisplayName</span>
+                            <span class="drive-path">@drive.DevicePath</span>
+                        </div>
+
+                        <div class="drive-header-actions">
+                            @if (drive.HasMedia)
+                            {
+                                <button class="btn btn-close-tray" @onclick="() => CloseTray(drive.DevicePath)" title="Close tray">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <rect x="3" y="3" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                                        <rect x="5" y="5" width="6" height="6" rx="1" fill="currentColor" opacity="0.3"/>
+                                    </svg>
+                                </button>
+                            }
+                            <button class="btn btn-eject @(drive.IsEjecting ? "ejecting" : "")"
+                                    @onclick="() => EjectDrive(drive.DevicePath)"
+                                    disabled="@drive.IsEjecting"
+                                    title="Eject">
+                                @if (drive.IsEjecting)
+                                {
+                                    <div class="spinner spinner-sm"></div>
+                                }
+                                else
+                                {
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <path d="M4 10L8 6L12 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <line x1="8" y1="6" x2="8" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                        <rect x="3" y="2" width="10" height="3" rx="1" stroke="currentColor" stroke-width="1.5"/>
+                                    </svg>
+                                }
+                                Eject
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (drive.HasMedia)
+                    {
+                        <div class="disc-details">
+                            @if (drive.MovieInfo != null)
+                            {
+                                var posterUrl = GetPosterUrl(drive);
+                                if (!string.IsNullOrEmpty(posterUrl))
+                                {
+                                    <img class="poster" src="@posterUrl" alt="@drive.DisplayTitle poster" />
+                                }
+                            }
+
+                            <div class="disc-info">
+                                <div class="disc-title-row">
+                                    @if (drive.IsIdentified)
+                                    {
+                                        <h2>@drive.DisplayTitle <span class="year">(@drive.MovieInfo!.Year)</span></h2>
+                                        <span class="badge badge-green">Identified</span>
+                                    }
+                                    else if (drive.IsAmbiguous)
+                                    {
+                                        <h2>@drive.DisplayTitle</h2>
+                                        <span class="badge badge-yellow">Not Identified</span>
+                                    }
+                                    else
+                                    {
+                                        <h2>@drive.DisplayTitle</h2>
+                                    }
+                                </div>
+                                <p class="disc-label">Disc label: @drive.Label</p>
+
+                                @if (drive.MovieInfo?.Overview != null)
+                                {
+                                    <p class="overview">@drive.MovieInfo.Overview</p>
+                                }
+
+                                <div class="movie-name-editor">
+                                    <label for="@($"movieName-{drive.DevicePath}")">Movie Name</label>
+                                    <div class="input-row">
+                                        <input id="@($"movieName-{drive.DevicePath}")"
+                                               type="text"
+                                               class="text-input"
+                                               @bind:get="GetMovieName(drive)"
+                                               @bind:set="(value) => SetMovieName(drive, value ?? string.Empty)"
+                                               @bind:event="oninput" />
+                                        <button class="btn btn-icon" title="Search TMDB"
+                                                @onclick="() => ToggleTmdbSearch(drive)">
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                                <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/>
+                                                <line x1="10.5" y1="10.5" x2="14" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                @if (activeDrive == drive.DevicePath && showTmdbSearch)
+                                {
+                                    <div class="tmdb-search">
+                                        <div class="input-row">
+                                            <input type="text" class="text-input" placeholder="Search TMDB…"
+                                                   @bind="tmdbSearchQuery" @bind:event="oninput" />
+                                            <button class="btn btn-primary" @onclick="PerformTmdbSearch"
+                                                    disabled="@(!isTmdbConfigured || string.IsNullOrWhiteSpace(tmdbSearchQuery) || tmdbSearching)">
+                                                Search
+                                            </button>
+                                        </div>
+
+                                        @if (tmdbSearching)
+                                        {
+                                            <div class="spinner-wrapper">
+                                                <div class="spinner"></div>
+                                            </div>
+                                        }
+                                        else if (tmdbResults.Count > 0)
+                                        {
+                                            <ul class="tmdb-results">
+                                                @foreach (var result in tmdbResults)
+                                                {
+                                                    <li class="tmdb-result-item" @onclick="() => SelectTmdbResult(drive, result)">
+                                                        <span class="tmdb-result-title">@result.Title</span>
+                                                        @if (result.Year > 0)
+                                                        {
+                                                            <span class="tmdb-result-year">(@result.Year)</span>
+                                                        }
+                                                    </li>
+                                                }
+                                            </ul>
+                                        }
+                                        else if (tmdbSearched)
+                                        {
+                                            <p class="no-results">No results found.</p>
+                                        }
+                                    </div>
+                                }
+
+                                <div class="disc-actions">
+                                    <button class="btn btn-primary btn-rip"
+                                            @onclick="() => StartRip(drive)"
+                                            disabled="@(activeJob != null)">
+                                        Start Rip
+                                    </button>
+                                    <span class="status-text">@drive.DevicePath ready</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="drive-empty">
+                            <div class="drive-icon-small">💿</div>
+                            <p>Empty — Insert a DVD</p>
+                            @* <button class="btn btn-secondary" @onclick="() => CloseTray(drive.DevicePath)"> *@
+                            @*     Close Tray *@
+                            @* </button> *@
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+
+    @if (activeJob != null)
+    {
+        <div class="active-rip-section">
+            <h3 class="history-heading">Active Rip</h3>
+            <div class="card rip-progress-card @(ripExpanded ? "rip-expanded" : "")"
+                 @onclick="() => ripExpanded = !ripExpanded">
+                <div class="rip-progress-header">
+                    <div class="rip-progress-title-row">
+                        <span class="rip-progress-title">@activeJob.MovieName</span>
+                        <span class="badge @StatusBadgeClass(activeJob.Status)">@activeJob.Status</span>
+                    </div>
+                    <span class="rip-expand-icon">@(ripExpanded ? "▲" : "▼")</span>
+                </div>
+                <div class="progress-bar">
+                    @if (activeJob.RipProgress > 0)
+                    {
+                        <div class="progress-fill" style="width: @activeJob.RipProgress.ToString("F1")%"></div>
+                    }
+                    else if (activeJob.RipBytesRead > 0)
+                    {
+                        <div class="progress-fill progress-indeterminate"></div>
+                    }
+                </div>
+                <div class="progress-meta">
+                    <span>@activeJob.DiscLabel</span>
+                    <span>
+                        @if (activeJob.RipProgress > 0)
+                        {
+                            @activeJob.RipProgress.ToString("F1")<text>%</text>
+                        }
+                        else if (activeJob.RipBytesRead > 0)
+                        {
+                            <text>Ripping</text>
+                        }
+                    </span>
+                </div>
+
+                @if (ripExpanded)
+                {
+                    <div class="rip-details">
+                        <div class="rip-stat-grid">
+                            <div class="rip-stat">
+                                <span class="rip-stat-label">Progress</span>
+                                <span class="rip-stat-value">
+                                    @if (activeJob.RipProgress > 0)
+                                    {
+                                        @activeJob.RipProgress.ToString("F1")<text>%</text>
+                                    }
+                                    else if (activeJob.RipBytesRead > 0)
+                                    {
+                                        <text>Ripping…</text>
+                                    }
+                                    else
+                                    {
+                                        <text>—</text>
+                                    }
+                                </span>
+                            </div>
+                            <div class="rip-stat">
+                                <span class="rip-stat-label">Elapsed</span>
+                                <span class="rip-stat-value">@activeJob.RipElapsed</span>
+                            </div>
+                            <div class="rip-stat">
+                                <span class="rip-stat-label">Speed</span>
+                                <span class="rip-stat-value">@(string.IsNullOrEmpty(activeJob.RipSpeed) ? "—" : activeJob.RipSpeed)</span>
+                            </div>
+                            <div class="rip-stat">
+                                <span class="rip-stat-label">ETA</span>
+                                <span class="rip-stat-value">@(string.IsNullOrEmpty(activeJob.RipEta) ? "—" : activeJob.RipEta)</span>
+                            </div>
+                            <div class="rip-stat">
+                                <span class="rip-stat-label">Read</span>
+                                <span class="rip-stat-value">@FormatBytes(activeJob.RipBytesRead)</span>
+                            </div>
+                            <div class="rip-stat">
+                                <span class="rip-stat-label">Output</span>
+                                <span class="rip-stat-value mono">@activeJob.OutputDir</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-cancel" @onclick="() => CancelRip(activeJob)" @onclick:stopPropagation="true">
+                            Cancel
+                        </button>
+                    </div>
+                }
+                @if (!string.IsNullOrEmpty(activeJob.ErrorMessage))
+                {
+                    <p class="history-error">@activeJob.ErrorMessage</p>
+                }
+            </div>
+        </div>
+    }
+
+    @if (processingJobs.Count > 0)
+    {
+        <div class="processing-section">
+            <h3 class="history-heading">Processing Queue</h3>
+            <div class="history-list">
+                @foreach (var job in processingJobs)
+                {
+                    <div class="card history-card">
+                        <div class="history-row">
+                            <div class="history-info">
+                                <span class="history-title">@job.MovieName</span>
+                                <span class="history-label">@job.DiscLabel</span>
+                            </div>
+                            <span class="badge @StatusBadgeClass(job.Status)">@job.Status</span>
+                        </div>
+                        @if (job.Status != RipStatus.Completed && job.Status != RipStatus.Failed)
+                        {
+                            <div class="progress-bar" style="margin-top: 8px;">
+                                <div class="progress-fill" style="width: @job.ProcessingProgress%"></div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(job.ErrorMessage))
+                        {
+                            <p class="history-error">@job.ErrorMessage</p>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @if (recentJobs.Count > 0)
+    {
+        <div class="history-section">
+            <h3 class="history-heading">Rip History</h3>
+            <div class="history-list">
+                @foreach (var job in recentJobs)
+                {
+                    <div class="card history-card">
+                        <div class="history-row">
+                            <div class="history-info">
+                                <span class="history-title">@job.MovieName</span>
+                                <span class="history-label">@job.DiscLabel</span>
+                            </div>
+                            <span class="badge @StatusBadgeClass(job.Status)">@job.Status</span>
+                        </div>
+                        <div class="history-meta">
+                            <span>@job.CreatedAt.ToString("MMM dd, yyyy HH:mm")</span>
+                            @if (job.CompletedAt != null)
+                            {
+                                <span>→ @job.CompletedAt.Value.ToString("MMM dd, yyyy HH:mm")</span>
+                            }
+                            @if (job.MovieInfo != null)
+                            {
+                                <span class="history-tmdb">TMDB: @job.MovieInfo.Title (@job.MovieInfo.Year)</span>
+                            }
+                        </div>
+                        @if (!string.IsNullOrEmpty(job.ErrorMessage))
+                        {
+                            <p class="history-error">@job.ErrorMessage</p>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<DiscInfo> drives = new();
+    private bool hasPolled;
+    private bool isTmdbConfigured;
+    private string imageBaseUrl = string.Empty;
+
+    private string activeDrive = string.Empty;
+    private bool showTmdbSearch;
+    private string tmdbSearchQuery = string.Empty;
+    private List<MovieInfo> tmdbResults = new();
+    private bool tmdbSearching;
+    private bool tmdbSearched;
+
+    private Dictionary<string, string> movieNames = new();
+
+    private List<RipJob> recentJobs = new();
+    private RipJob? activeJob;
+    private List<RipJob> processingJobs = new();
+    private bool ripExpanded = true;
+    private int _pollCount;
+    private CancellationTokenSource? _pollCts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isTmdbConfigured = TmdbService.IsConfigured;
+        DriveService.DrivesChanged += OnDrivesChanged;
+        Orchestrator.JobUpdated += OnJobUpdated;
+        Orchestrator.StateChanged += OnStateChanged;
+        await LoadHistoryAsync();
+
+        if (isTmdbConfigured)
+            imageBaseUrl = await TmdbService.GetImageBaseUrlAsync();
+
+        await DriveService.PollOnceAsync();
+        hasPolled = DriveService.HasPolled;
+        ApplyDrives(DriveService.Drives.ToList());
+
+        RefreshOrchestratorState();
+
+        _pollCts = new CancellationTokenSource();
+        _ = PollLoopAsync(_pollCts.Token);
+    }
+
+    private async Task PollLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            await Task.Delay(500, ct);
+            _pollCount++;
+            var prev = activeJob;
+            RefreshOrchestratorState();
+            if (activeJob != prev || activeJob?.Status != prev?.Status || _pollCount % 6 == 0)
+                StateHasChanged();
+        }
+    }
+
+    private void OnJobUpdated(RipJob job)
+    {
+        activeJob = job;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnStateChanged()
+    {
+        RefreshOrchestratorState();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void RefreshOrchestratorState()
+    {
+        activeJob = Orchestrator.ActiveRip;
+        processingJobs = Orchestrator.ProcessingJobs.ToList();
+    }
+
+    private async void OnDrivesChanged(IReadOnlyList<DiscInfo> list)
+    {
+        try
+        {
+            hasPolled = true;
+            ApplyDrives(list.ToList());
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"OnDrivesChanged error: {ex}");
+        }
+    }
+
+    private void ApplyDrives(List<DiscInfo> list)
+    {
+        drives = list;
+
+        var existingNames = new Dictionary<string, string>(movieNames);
+
+        foreach (var drive in list)
+        {
+            if (drive.HasMedia)
+            {
+                if (!movieNames.ContainsKey(drive.DevicePath))
+                    movieNames[drive.DevicePath] = drive.Label;
+
+                if (isTmdbConfigured && drive.IsAmbiguous && drive.MovieInfo == null && !drive.IsEjecting)
+                    _ = AutoIdentifyAsync(drive);
+            }
+            else
+            {
+                movieNames.Remove(drive.DevicePath);
+            }
+        }
+
+        var removedKeys = movieNames.Keys.Where(k => !list.Any(d => d.DevicePath == k)).ToList();
+        foreach (var key in removedKeys)
+            movieNames.Remove(key);
+
+        if (activeDrive != string.Empty && !list.Any(d => d.DevicePath == activeDrive && d.HasMedia))
+        {
+            showTmdbSearch = false;
+            activeDrive = string.Empty;
+        }
+    }
+
+    private string GetMovieName(DiscInfo drive)
+    {
+        return movieNames.TryGetValue(drive.DevicePath, out var name) ? name : drive.Label;
+    }
+
+    private string? GetPosterUrl(DiscInfo drive)
+    {
+        return drive.MovieInfo?.PosterUrl(imageBaseUrl);
+    }
+
+    private void SetMovieName(DiscInfo drive, string? value)
+    {
+        movieNames[drive.DevicePath] = value ?? string.Empty;
+    }
+
+    private async Task AutoIdentifyAsync(DiscInfo drive)
+    {
+        try
+        {
+            var result = await TmdbService.SearchMovieAsync(drive.Label);
+            if (result != null)
+            {
+                DriveService.UpdateDriveMetadata(drive.DevicePath, result, result.Title);
+                if (movieNames.TryGetValue(drive.DevicePath, out var current) && current == drive.Label)
+                    movieNames[drive.DevicePath] = result.Title;
+            }
+            else
+            {
+                drive.IsAmbiguous = true;
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            drive.IsAmbiguous = true;
+        }
+    }
+
+    private async Task EjectDrive(string device)
+    {
+        await DriveService.EjectAsync(device);
+        movieNames.Remove(device);
+        showTmdbSearch = false;
+        activeDrive = string.Empty;
+    }
+
+    private async Task CloseTray(string device)
+    {
+        await DriveService.CloseTrayAsync(device);
+        await Task.Delay(2000);
+        await DriveService.PollOnceAsync();
+    }
+
+    private Task ToggleTmdbSearch(DiscInfo drive)
+    {
+        if (activeDrive == drive.DevicePath && showTmdbSearch)
+        {
+            showTmdbSearch = false;
+        }
+        else
+        {
+            activeDrive = drive.DevicePath;
+            showTmdbSearch = true;
+            tmdbSearchQuery = GetMovieName(drive);
+            tmdbResults.Clear();
+            tmdbSearched = false;
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task PerformTmdbSearch()
+    {
+        if (string.IsNullOrWhiteSpace(tmdbSearchQuery)) return;
+
+        tmdbSearching = true;
+        tmdbSearched = false;
+        StateHasChanged();
+
+        tmdbResults = await TmdbService.SearchMoviesAsync(tmdbSearchQuery);
+
+        tmdbSearching = false;
+        tmdbSearched = true;
+    }
+
+    private async Task SelectTmdbResult(DiscInfo drive, MovieInfo result)
+    {
+        drive.MovieInfo = result;
+        drive.IsAmbiguous = false;
+
+        movieNames[drive.DevicePath] = result.Title;
+
+        DriveService.UpdateDriveMetadata(drive.DevicePath, result, result.Title);
+
+        showTmdbSearch = false;
+        tmdbResults.Clear();
+    }
+
+    private async Task StartRip(DiscInfo drive)
+    {
+        var name = GetMovieName(drive);
+        await Orchestrator.EnqueueRipAsync(drive.DevicePath, name, drive.Label, drive.MovieInfo);
+        RefreshOrchestratorState();
+        await LoadHistoryAsync();
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        recentJobs = await RipHistory.GetRecentJobsAsync(10);
+    }
+
+    private string StatusBadgeClass(RipStatus status) => status switch
+    {
+        RipStatus.Completed => "badge-green",
+        RipStatus.Failed => "badge-red",
+        _ => "badge-yellow"
+    };
+
+    private static string FormatBytes(long bytes) => bytes switch
+    {
+        0 => "—",
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+        < 1024 * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
+        _ => $"{bytes / (1024.0 * 1024 * 1024):F2} GB"
+    };
+
+    private async Task CancelRip(RipJob job)
+    {
+        await Orchestrator.CancelRipAsync(job.Id);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _pollCts?.Cancel();
+        _pollCts?.Dispose();
+        Orchestrator.JobUpdated -= OnJobUpdated;
+        Orchestrator.StateChanged -= OnStateChanged;
+        DriveService.DrivesChanged -= OnDrivesChanged;
+        GC.SuppressFinalize(this);
+    }
+}

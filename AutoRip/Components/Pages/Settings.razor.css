@@ -1,0 +1,52 @@
+.settings-page {
+    max-width: 620px;
+    margin: 0 auto;
+    padding: 40px 24px;
+}
+
+.settings-header {
+    margin-bottom: 32px;
+}
+
+.back-link {
+    display: inline-block;
+    margin-bottom: 12px;
+}
+
+.settings-header h1 {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.settings-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.card h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.card-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+.settings-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.saved-badge {
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}

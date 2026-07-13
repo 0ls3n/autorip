@@ -1,0 +1,98 @@
+@page "/settings"
+@using AutoRip.Models
+@inject SettingsService SettingsService
+@inject NavigationManager Navigation
+
+@rendermode InteractiveServer
+
+<PageTitle>Settings — AutoRip</PageTitle>
+
+<div class="settings-page">
+    <header class="settings-header">
+        <a href="/" class="nav-link back-link">← Back</a>
+        <h1>Settings</h1>
+    </header>
+
+    <div class="settings-content">
+        <div class="card">
+            <h2>TMDB Integration</h2>
+            <p class="card-desc">Automatically identify movies using The Movie Database.</p>
+
+            <div class="form-group">
+                <label for="tmdbApiKey">API Key</label>
+                <input id="tmdbApiKey" type="password" class="text-input" @bind="apiKey" placeholder="Paste your TMDB API key…" />
+                <p class="hint">
+                    Get a free key at
+                    <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a>
+                </p>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" @bind="autoDetect" />
+                    <span>Auto-identify discs when inserted</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Output</h2>
+
+            <div class="form-group">
+                <label for="outputDir">Output Directory</label>
+                <input id="outputDir" type="text" class="text-input" @bind="outputDir" />
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" @bind="autoDeleteMkv" />
+                    <span>Delete .mkv after successful transcode</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="settings-actions">
+            <button class="btn btn-primary" @onclick="SaveSettings">Save</button>
+            @if (saved)
+            {
+                <span class="badge badge-green saved-badge">Saved</span>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private string apiKey = string.Empty;
+    private bool autoDetect = true;
+    private string outputDir = "~/Videos/Rips";
+    private bool autoDeleteMkv = true;
+    private bool saved;
+
+    protected override void OnInitialized()
+    {
+        var settings = SettingsService.Current;
+        if (settings != null)
+        {
+            apiKey = settings.TmdbApiKey ?? string.Empty;
+            autoDetect = settings.UseTmdbAutoDetect;
+            outputDir = settings.OutputDirectory;
+            autoDeleteMkv = settings.AutoDeleteMkv;
+        }
+    }
+
+    private async Task SaveSettings()
+    {
+        if (SettingsService.Current == null) return;
+
+        SettingsService.Current.TmdbApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
+        SettingsService.Current.UseTmdbAutoDetect = autoDetect;
+        SettingsService.Current.OutputDirectory = outputDir;
+        SettingsService.Current.AutoDeleteMkv = autoDeleteMkv;
+
+        await SettingsService.SaveAsync();
+
+        saved = true;
+        await Task.Delay(2000);
+        saved = false;
+    }
+}
