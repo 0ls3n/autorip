@@ -8,15 +8,9 @@
 @inject RipOrchestrator Orchestrator
 @implements IAsyncDisposable
 
-<PageTitle>AutoRip</PageTitle>
+<PageTitle>Dashboard — AutoRip</PageTitle>
 
 <div class="dashboard">
-    <header class="dashboard-header">
-        <h1 class="logo">AUTO<span class="logo-accent">RIP</span></h1>
-        <span style="color:var(--text-secondary);font-size:11px;font-family:monospace">poll:@_pollCount</span>
-        <a href="/settings" class="nav-link">Settings</a>
-    </header>
-
     <div class="dashboard-content">
         @if (!hasPolled)
         {
@@ -39,6 +33,7 @@
         }
         else
         {
+            <div class="dashboard-drives">
             @foreach (var drive in drives)
             {
                 <div class="card drive-card @(drive.HasMedia ? "drive-card-active" : "")">
@@ -125,7 +120,7 @@
                                                @bind:set="(value) => SetMovieName(drive, value ?? string.Empty)"
                                                @bind:event="oninput" />
                                         <button class="btn btn-icon" title="Search TMDB"
-                                                @onclick="() => ToggleTmdbSearch(drive)">
+                                                @onclick="() => OpenTmdbSearch(drive)">
                                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                                 <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/>
                                                 <line x1="10.5" y1="10.5" x2="14" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -133,46 +128,6 @@
                                         </button>
                                     </div>
                                 </div>
-
-                                @if (activeDrive == drive.DevicePath && showTmdbSearch)
-                                {
-                                    <div class="tmdb-search">
-                                        <div class="input-row">
-                                            <input type="text" class="text-input" placeholder="Search TMDB…"
-                                                   @bind="tmdbSearchQuery" @bind:event="oninput" />
-                                            <button class="btn btn-primary" @onclick="PerformTmdbSearch"
-                                                    disabled="@(!isTmdbConfigured || string.IsNullOrWhiteSpace(tmdbSearchQuery) || tmdbSearching)">
-                                                Search
-                                            </button>
-                                        </div>
-
-                                        @if (tmdbSearching)
-                                        {
-                                            <div class="spinner-wrapper">
-                                                <div class="spinner"></div>
-                                            </div>
-                                        }
-                                        else if (tmdbResults.Count > 0)
-                                        {
-                                            <ul class="tmdb-results">
-                                                @foreach (var result in tmdbResults)
-                                                {
-                                                    <li class="tmdb-result-item" @onclick="() => SelectTmdbResult(drive, result)">
-                                                        <span class="tmdb-result-title">@result.Title</span>
-                                                        @if (result.Year > 0)
-                                                        {
-                                                            <span class="tmdb-result-year">(@result.Year)</span>
-                                                        }
-                                                    </li>
-                                                }
-                                            </ul>
-                                        }
-                                        else if (tmdbSearched)
-                                        {
-                                            <p class="no-results">No results found.</p>
-                                        }
-                                    </div>
-                                }
 
                                 <div class="disc-actions">
                                     <button class="btn btn-primary btn-rip"
@@ -197,6 +152,7 @@
                     }
                 </div>
             }
+            </div>
         }
     </div>
 
@@ -363,38 +319,72 @@
         </div>
     }
 
-    @if (recentJobs.Count > 0)
+    @if (showTmdbSearch)
     {
-        <div class="history-section">
-            <h3 class="history-heading">Rip History</h3>
-            <div class="history-list">
-                @foreach (var job in recentJobs)
-                {
-                    <div class="card history-card">
-                        <div class="history-row">
-                            <div class="history-info">
-                                <span class="history-title">@job.MovieName</span>
-                                <span class="history-label">@job.DiscLabel</span>
-                            </div>
-                            <span class="badge @StatusBadgeClass(job.Status)">@job.Status</span>
+        <div class="modal-overlay" @onclick="CloseTmdbSearch">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h2>Search Movie</h2>
+                    <button class="modal-close" @onclick="CloseTmdbSearch">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form class="modal-search-bar" @onsubmit="OnSearchSubmit">
+                        <input type="text" class="text-input" placeholder="Search by title…"
+                               @bind="tmdbSearchQuery" @bind:event="oninput" />
+                        <button type="submit" class="btn btn-primary" @onclick="PerformTmdbSearch"
+                                disabled="@(!isTmdbConfigured || string.IsNullOrWhiteSpace(tmdbSearchQuery) || tmdbSearching)">
+                            Search
+                        </button>
+                    </form>
+
+                    @if (tmdbSearching)
+                    {
+                        <div class="modal-loading">
+                            <div class="spinner"></div>
+                            <span>Searching…</span>
                         </div>
-                        <div class="history-meta">
-                            <span>@job.CreatedAt.ToString("MMM dd, yyyy HH:mm")</span>
-                            @if (job.CompletedAt != null)
+                    }
+                    else if (tmdbResults.Count > 0)
+                    {
+                        <div class="modal-results">
+                            @foreach (var result in tmdbResults)
                             {
-                                <span>→ @job.CompletedAt.Value.ToString("MMM dd, yyyy HH:mm")</span>
-                            }
-                            @if (job.MovieInfo != null)
-                            {
-                                <span class="history-tmdb">TMDB: @job.MovieInfo.Title (@job.MovieInfo.Year)</span>
+                                <div class="modal-result-card" @onclick="() => SelectTmdbResult(result)">
+                                    @{
+                                        var poster = result.PosterUrl(imageBaseUrl, "w185");
+                                    }
+                                    @if (!string.IsNullOrEmpty(poster))
+                                    {
+                                        <div class="modal-result-poster-wrap">
+                                            <img src="@poster" alt="@result.Title" loading="lazy" />
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="modal-result-no-poster">
+                                            <span>🎬</span>
+                                        </div>
+                                    }
+                                    <div class="modal-result-info">
+                                        <span class="modal-result-title">@result.Title</span>
+                                        @if (result.Year > 0)
+                                        {
+                                            <span class="modal-result-year">@result.Year</span>
+                                        }
+                                    </div>
+                                </div>
                             }
                         </div>
-                        @if (!string.IsNullOrEmpty(job.ErrorMessage))
-                        {
-                            <p class="history-error">@job.ErrorMessage</p>
-                        }
-                    </div>
-                }
+                    }
+                    else if (tmdbSearched)
+                    {
+                        <p class="modal-no-results">No results found for "@tmdbSearchQuery".</p>
+                    }
+                    else
+                    {
+                        <p class="modal-hint">Type a movie title and press Search.</p>
+                    }
+                </div>
             </div>
         </div>
     }
@@ -415,7 +405,6 @@
 
     private Dictionary<string, string> movieNames = new();
 
-    private List<RipJob> recentJobs = new();
     private RipJob? activeJob;
     private List<RipJob> processingJobs = new();
     private RipJob? processingJob;
@@ -430,7 +419,6 @@
         DriveService.DrivesChanged += OnDrivesChanged;
         Orchestrator.JobUpdated += OnJobUpdated;
         Orchestrator.StateChanged += OnStateChanged;
-        await LoadHistoryAsync();
 
         if (isTmdbConfigured)
             imageBaseUrl = await TmdbService.GetImageBaseUrlAsync();
@@ -549,6 +537,9 @@
                 DriveService.UpdateDriveMetadata(drive.DevicePath, result, result.Title);
                 if (movieNames.TryGetValue(drive.DevicePath, out var current) && current == drive.Label)
                     movieNames[drive.DevicePath] = result.Title;
+
+                if (SettingsService.Current?.AutoStartRip == true && activeJob == null)
+                    _ = StartRip(drive);
             }
             else
             {
@@ -577,26 +568,30 @@
         await DriveService.PollOnceAsync();
     }
 
-    private Task ToggleTmdbSearch(DiscInfo drive)
+    private void OpenTmdbSearch(DiscInfo drive)
     {
-        if (activeDrive == drive.DevicePath && showTmdbSearch)
-        {
-            showTmdbSearch = false;
-        }
-        else
-        {
-            activeDrive = drive.DevicePath;
-            showTmdbSearch = true;
-            tmdbSearchQuery = GetMovieName(drive);
-            tmdbResults.Clear();
-            tmdbSearched = false;
-        }
-        return Task.CompletedTask;
+        activeDrive = drive.DevicePath;
+        showTmdbSearch = true;
+        tmdbSearchQuery = GetMovieName(drive);
+        tmdbResults.Clear();
+        tmdbSearched = false;
+    }
+
+    private void CloseTmdbSearch()
+    {
+        showTmdbSearch = false;
+        tmdbResults.Clear();
+        tmdbSearched = false;
+    }
+
+    private Task OnSearchSubmit()
+    {
+        return PerformTmdbSearch();
     }
 
     private async Task PerformTmdbSearch()
     {
-        if (string.IsNullOrWhiteSpace(tmdbSearchQuery)) return;
+        if (string.IsNullOrWhiteSpace(tmdbSearchQuery) || tmdbSearching) return;
 
         tmdbSearching = true;
         tmdbSearched = false;
@@ -608,17 +603,17 @@
         tmdbSearched = true;
     }
 
-    private async Task SelectTmdbResult(DiscInfo drive, MovieInfo result)
+    private void SelectTmdbResult(MovieInfo result)
     {
+        var drive = drives.FirstOrDefault(d => d.DevicePath == activeDrive);
+        if (drive == null) { CloseTmdbSearch(); return; }
+
         drive.MovieInfo = result;
         drive.IsAmbiguous = false;
-
         movieNames[drive.DevicePath] = result.Title;
-
         DriveService.UpdateDriveMetadata(drive.DevicePath, result, result.Title);
 
-        showTmdbSearch = false;
-        tmdbResults.Clear();
+        CloseTmdbSearch();
     }
 
     private async Task StartRip(DiscInfo drive)
@@ -626,12 +621,6 @@
         var name = GetMovieName(drive);
         await Orchestrator.EnqueueRipAsync(drive.DevicePath, name, drive.Label, drive.MovieInfo);
         RefreshOrchestratorState();
-        await LoadHistoryAsync();
-    }
-
-    private async Task LoadHistoryAsync()
-    {
-        recentJobs = await RipHistory.GetRecentJobsAsync(10);
     }
 
     private string StatusBadgeClass(RipStatus status) => status switch

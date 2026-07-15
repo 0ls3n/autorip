@@ -1,21 +1,5 @@
 .settings-page {
-    max-width: 620px;
-    margin: 0 auto;
-    padding: 40px 24px;
-}
-
-.settings-header {
-    margin-bottom: 32px;
-}
-
-.back-link {
-    display: inline-block;
-    margin-bottom: 12px;
-}
-
-.settings-header h1 {
-    font-size: 24px;
-    font-weight: 700;
+    padding: 32px 36px;
 }
 
 .settings-content {

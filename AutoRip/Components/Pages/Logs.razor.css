@@ -1,0 +1,74 @@
+.logs-page {
+    padding: 32px 36px;
+}
+
+.logs-job-selector {
+    margin-bottom: 16px;
+}
+
+.logs-job-selector label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.log-card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.log-entry {
+    display: flex;
+    gap: 12px;
+    padding: 8px 16px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-time {
+    color: var(--text-secondary);
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+    font-size: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.log-level {
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 44px;
+}
+
+.log-info {
+    color: var(--accent);
+}
+
+.log-warn {
+    color: var(--yellow);
+}
+
+.log-error {
+    color: var(--red);
+}
+
+.log-message {
+    color: var(--text-primary);
+}
+
+.empty-card {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+}

@@ -17,7 +17,8 @@ public class RipOrchestrator : IHostedService, IDisposable
     private readonly ConcurrentQueue<RipJob> _processingQueue = new();
     private RipJob? _activeRip;
     private RipJob? _activeProcessing;
-    private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _ripCts;
+    private CancellationTokenSource? _loopCts;
     private Task? _loopTask;
     private readonly Lock _lock = new();
     private readonly SemaphoreSlim _ripSignal = new(0);
@@ -102,28 +103,27 @@ public class RipOrchestrator : IHostedService, IDisposable
 
     public async Task CancelRipAsync(string jobId)
     {
+        CancellationTokenSource? cts;
         lock (_lock)
         {
-            if (_activeRip?.Id == jobId)
-            {
-                _cts?.Cancel();
-                return;
-            }
+            if (_activeRip?.Id != jobId) return;
+            cts = _ripCts;
         }
+        cts?.Cancel();
         await Task.CompletedTask;
     }
 
     Task IHostedService.StartAsync(CancellationToken cancellationToken)
     {
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _loopTask = RunLoopAsync(_cts.Token);
+        _loopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _loopTask = RunLoopAsync(_loopCts.Token);
         _logger.LogInformation("RipOrchestrator started");
         return Task.CompletedTask;
     }
 
     Task IHostedService.StopAsync(CancellationToken cancellationToken)
     {
-        _cts?.Cancel();
+        _loopCts?.Cancel();
         _logger.LogInformation("RipOrchestrator stopping");
         return _loopTask ?? Task.CompletedTask;
     }
@@ -149,7 +149,7 @@ public class RipOrchestrator : IHostedService, IDisposable
         }
     }
 
-    private async Task ProcessRipAsync(RipJob job, string device, CancellationToken ct)
+    private async Task ProcessRipAsync(RipJob job, string device, CancellationToken loopCt)
     {
         ActiveRip = job;
 
@@ -159,6 +159,9 @@ public class RipOrchestrator : IHostedService, IDisposable
         job.RipStartedAt = DateTime.Now;
         _lastBytes = 0;
         _lastProgressTime = DateTime.Now;
+
+        _ripCts = new CancellationTokenSource();
+        using var ripCt = CancellationTokenSource.CreateLinkedTokenSource(loopCt, _ripCts.Token);
 
         StateChanged?.Invoke();
         JobUpdated?.Invoke(job);
@@ -209,7 +212,7 @@ public class RipOrchestrator : IHostedService, IDisposable
                     StateChanged?.Invoke();
                     JobUpdated?.Invoke(job);
                 },
-                ct: ct);
+                ct: ripCt.Token);
 
             job.MkvPath = mkvPath;
             job.RipProgress = 100;
@@ -221,6 +224,15 @@ public class RipOrchestrator : IHostedService, IDisposable
 
             await LogToJobAsync(job.Id, "Info", $"Rip complete: {mkvPath}");
             EnqueueProcessing(job);
+
+            if (_settings.Current.AutoEjectAfterRip)
+            {
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(2000);
+                    await _driveService.EjectAsync(device);
+                });
+            }
         }
         catch (OperationCanceledException)
         {
@@ -235,6 +247,8 @@ public class RipOrchestrator : IHostedService, IDisposable
         }
         finally
         {
+            _ripCts?.Dispose();
+            _ripCts = null;
             _driveService.ResumePolling();
             JobUpdated?.Invoke(job);
             _ = DelayClearActiveRip();
@@ -384,8 +398,9 @@ public class RipOrchestrator : IHostedService, IDisposable
 
     public void Dispose()
     {
-        _cts?.Cancel();
-        _cts?.Dispose();
+        _loopCts?.Cancel();
+        _ripCts?.Dispose();
+        _loopCts?.Dispose();
         _ripSignal.Dispose();
         GC.SuppressFinalize(this);
     }

@@ -8,10 +8,7 @@
 <PageTitle>Settings — AutoRip</PageTitle>
 
 <div class="settings-page">
-    <header class="settings-header">
-        <a href="/" class="nav-link back-link">← Back</a>
-        <h1>Settings</h1>
-    </header>
+    <h1 class="page-heading">Settings</h1>
 
     <div class="settings-content">
         <div class="card">
@@ -155,6 +152,24 @@
         </div>
 
         <div class="card">
+            <h2>Automation</h2>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" @bind="autoEject" />
+                    <span>Eject disc after rip completes</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" @bind="autoStartRip" />
+                    <span>Auto-start rip when disc is inserted</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="card">
             <h2>Output</h2>
 
             <div class="form-group">
@@ -185,6 +200,8 @@
     private bool autoDetect = true;
     private string outputDir = "~/Videos/Rips";
     private bool autoDeleteMkv = true;
+    private bool autoEject = true;
+    private bool autoStartRip = false;
     private bool saved;
 
     private bool useCustom;
@@ -214,6 +231,8 @@
             autoDetect = settings.UseTmdbAutoDetect;
             outputDir = settings.OutputDirectory;
             autoDeleteMkv = settings.AutoDeleteMkv;
+            autoEject = settings.AutoEjectAfterRip;
+            autoStartRip = settings.AutoStartRip;
             useCustom = settings.UseCustomHandbrake;
             selectedPreset = settings.HandbrakePreset;
             selectedEncoder = settings.HandbrakeEncoder ?? "x264";
@@ -239,6 +258,8 @@
         SettingsService.Current.UseTmdbAutoDetect = autoDetect;
         SettingsService.Current.OutputDirectory = outputDir;
         SettingsService.Current.AutoDeleteMkv = autoDeleteMkv;
+        SettingsService.Current.AutoEjectAfterRip = autoEject;
+        SettingsService.Current.AutoStartRip = autoStartRip;
         SettingsService.Current.UseCustomHandbrake = useCustom;
         SettingsService.Current.HandbrakePreset = selectedPreset;
         SettingsService.Current.HandbrakeEncoder = selectedEncoder;

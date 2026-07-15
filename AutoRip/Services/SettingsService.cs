@@ -42,6 +42,8 @@ public class SettingsService
                 case "HandbrakeFramerate": Current.HandbrakeFramerate = entry.Value ?? "source"; break;
                 case "HandbrakeCfr": Current.HandbrakeCfr = entry.Value == "true"; break;
                 case "AutoDeleteMkv": Current.AutoDeleteMkv = entry.Value == "true"; break;
+                case "AutoEjectAfterRip": Current.AutoEjectAfterRip = entry.Value != "false"; break;
+                case "AutoStartRip": Current.AutoStartRip = entry.Value == "true"; break;
                 case "ExtractAllSubtitles": Current.ExtractAllSubtitles = entry.Value == "true"; break;
                 case "PreferredSubtitleLanguages":
                     if (!string.IsNullOrWhiteSpace(entry.Value))
@@ -90,6 +92,8 @@ public class SettingsService
             ["HandbrakeFramerate"] = Current.HandbrakeFramerate,
             ["HandbrakeCfr"] = Current.HandbrakeCfr.ToString().ToLower(),
             ["AutoDeleteMkv"] = Current.AutoDeleteMkv.ToString().ToLower(),
+            ["AutoEjectAfterRip"] = Current.AutoEjectAfterRip.ToString().ToLower(),
+            ["AutoStartRip"] = Current.AutoStartRip.ToString().ToLower(),
             ["ExtractAllSubtitles"] = Current.ExtractAllSubtitles.ToString().ToLower(),
             ["PreferredSubtitleLanguages"] = string.Join(",", Current.PreferredSubtitleLanguages),
             ["OcrVobSub"] = Current.OcrVobSub.ToString().ToLower(),

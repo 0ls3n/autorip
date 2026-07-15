@@ -1,0 +1,95 @@
+@page "/collection"
+@using AutoRip.Models
+@using AutoRip.Services
+@inject RipHistoryService RipHistory
+@inject TmdbService TmdbService
+@inject SettingsService SettingsService
+
+<PageTitle>Collection — AutoRip</PageTitle>
+
+<div class="collection-page">
+    <h1 class="page-heading">Collection</h1>
+
+    @if (loading)
+    {
+        <div class="card empty-card">
+            <div class="spinner"></div>
+            <p>Loading collection…</p>
+        </div>
+    }
+    else if (completedJobs.Count == 0)
+    {
+        <div class="card empty-card">
+            <div class="collection-empty-icon">🎬</div>
+            <h2>No movies yet</h2>
+            <p>Ripped and transcoded movies will appear here.</p>
+        </div>
+    }
+    else
+    {
+        <div class="collection-grid">
+            @foreach (var job in completedJobs)
+            {
+                <div class="card collection-card">
+                    @if (job.MovieInfo != null)
+                    {
+                        var poster = job.MovieInfo.PosterUrl(imageBaseUrl, "w185");
+                        if (!string.IsNullOrEmpty(poster))
+                        {
+                            <div class="collection-poster-wrapper">
+                                <img class="collection-poster" src="@poster" alt="@job.MovieName" loading="lazy" />
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="collection-poster-placeholder">
+                            <span>🎬</span>
+                        </div>
+                    }
+
+                    <div class="collection-info">
+                        <span class="collection-title">@job.MovieName</span>
+                        @if (job.MovieInfo?.Year > 0)
+                        {
+                            <span class="collection-year">@job.MovieInfo.Year</span>
+                        }
+                        <span class="collection-meta">
+                            Ripped @job.CompletedAt?.ToString("MMM dd, yyyy")
+                        </span>
+                        @if (!string.IsNullOrEmpty(job.Mp4Path))
+                        {
+                            <span class="collection-path" title="@job.Mp4Path">@Path.GetFileName(job.Mp4Path)</span>
+                        }
+                        @if (!string.IsNullOrEmpty(job.MkvPath))
+                        {
+                            <span class="collection-path" title="@job.MkvPath">@Path.GetFileName(job.MkvPath)</span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<RipJob> completedJobs = new();
+    private string imageBaseUrl = string.Empty;
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var all = await RipHistory.GetAllJobsAsync();
+            completedJobs = all.Where(j => j.Status == RipStatus.Completed).ToList();
+
+            if (SettingsService.Current?.UseTmdbAutoDetect == true)
+                imageBaseUrl = await TmdbService.GetImageBaseUrlAsync();
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

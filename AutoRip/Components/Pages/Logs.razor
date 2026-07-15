@@ -1,0 +1,87 @@
+@page "/logs"
+@using AutoRip.Models
+@using AutoRip.Services
+@using AutoRip.Data
+@inject RipHistoryService RipHistory
+
+<PageTitle>Logs — AutoRip</PageTitle>
+
+<div class="logs-page">
+    <h1 class="page-heading">Rip Logs</h1>
+
+    @if (jobs.Count == 0)
+    {
+        <div class="card empty-card">
+            <p>No rip logs yet. Start a rip to see logs here.</p>
+        </div>
+    }
+    else
+    {
+        <div class="logs-job-selector">
+            <label for="jobSelect">Select job</label>
+            <div class="select-wrapper">
+                <select id="jobSelect" class="text-input" @bind="selectedJobId" @bind:after="LoadLogsAsync">
+                    @foreach (var job in jobs)
+                    {
+                        <option value="@job.Id">
+                            @job.MovieName (@job.CreatedAt.ToString("MMM dd yyyy"))
+                            @if (job.Status == RipStatus.Completed) { <text>✓</text> }
+                            else if (job.Status == RipStatus.Failed) { <text>✗</text> }
+                        </option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        @if (logs.Count > 0)
+        {
+            <div class="card log-card">
+                @foreach (var entry in logs)
+                {
+                    <div class="log-entry">
+                        <span class="log-time">@entry.Timestamp.ToString("HH:mm:ss")</span>
+                        <span class="log-level @LogLevelClass(entry.Level)">@entry.Level</span>
+                        <span class="log-message">@entry.Message</span>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="card empty-card">
+                <p>No log entries for this job.</p>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<RipJob> jobs = new();
+    private List<RipLogEntry> logs = new();
+    private string selectedJobId = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        jobs = await RipHistory.GetAllJobsAsync();
+        if (jobs.Count > 0)
+        {
+            selectedJobId = jobs[0].Id;
+            await LoadLogsAsync();
+        }
+    }
+
+    private async Task LoadLogsAsync()
+    {
+        if (string.IsNullOrEmpty(selectedJobId))
+            logs = new();
+        else
+            logs = await RipHistory.GetLogsForJobAsync(selectedJobId);
+    }
+
+    private static string LogLevelClass(string level) => level switch
+    {
+        "Error" => "log-error",
+        "Warning" => "log-warn",
+        _ => "log-info"
+    };
+}

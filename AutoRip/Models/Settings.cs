@@ -14,6 +14,8 @@ public class Settings
     public string? HandbrakeFramerate { get; set; } = "source";
     public bool HandbrakeCfr { get; set; } = false;
     public bool AutoDeleteMkv { get; set; } = true;
+    public bool AutoEjectAfterRip { get; set; } = true;
+    public bool AutoStartRip { get; set; } = false;
     public bool ExtractAllSubtitles { get; set; } = true;
     public List<string> PreferredSubtitleLanguages { get; set; } = new() { "eng" };
     public bool OcrVobSub { get; set; } = false;
