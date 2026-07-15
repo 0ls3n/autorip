@@ -16,6 +16,7 @@ public class Settings
     public bool AutoDeleteMkv { get; set; } = true;
     public bool AutoEjectAfterRip { get; set; } = true;
     public bool AutoStartRip { get; set; } = false;
+    public int MaxParallelRips { get; set; } = 0;
     public bool ExtractAllSubtitles { get; set; } = true;
     public List<string> PreferredSubtitleLanguages { get; set; } = new() { "eng" };
     public bool OcrVobSub { get; set; } = false;

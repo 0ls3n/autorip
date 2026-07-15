@@ -132,7 +132,7 @@
                                 <div class="disc-actions">
                                     <button class="btn btn-primary btn-rip"
                                             @onclick="() => StartRip(drive)"
-                                            disabled="@(activeJob != null)">
+                                            disabled="@(Orchestrator.IsDeviceRipping(drive.DevicePath))">
                                         Start Rip
                                     </button>
                                     <span class="status-text">@drive.DevicePath ready</span>
@@ -156,95 +156,98 @@
         }
     </div>
 
-    @if (activeJob != null)
+    @if (activeJobs.Count > 0)
     {
         <div class="active-rip-section">
-            <h3 class="history-heading">Active Rip</h3>
-            <div class="card rip-progress-card @(ripExpanded ? "rip-expanded" : "")"
-                 @onclick="() => ripExpanded = !ripExpanded">
-                <div class="rip-progress-header">
-                    <div class="rip-progress-title-row">
-                        <span class="rip-progress-title">@activeJob.MovieName</span>
-                        <span class="badge @StatusBadgeClass(activeJob.Status)">@activeJob.Status</span>
+            <h3 class="history-heading">Active @(activeJobs.Count == 1 ? "Rip" : "Rips")</h3>
+            @foreach (var activeJob in activeJobs)
+            {
+                <div class="card rip-progress-card @(ripExpanded ? "rip-expanded" : "")"
+                     @onclick="() => ripExpanded = !ripExpanded">
+                    <div class="rip-progress-header">
+                        <div class="rip-progress-title-row">
+                            <span class="rip-progress-title">@activeJob.MovieName</span>
+                            <span class="badge @StatusBadgeClass(activeJob.Status)">@activeJob.Status</span>
+                        </div>
+                        <span class="rip-expand-icon">@(ripExpanded ? "▲" : "▼")</span>
                     </div>
-                    <span class="rip-expand-icon">@(ripExpanded ? "▲" : "▼")</span>
-                </div>
-                <div class="progress-bar">
-                    @if (activeJob.RipProgress > 0)
-                    {
-                        <div class="progress-fill" style="width: @activeJob.RipProgress.ToString("F1")%"></div>
-                    }
-                    else if (activeJob.RipBytesRead > 0)
-                    {
-                        <div class="progress-fill progress-indeterminate"></div>
-                    }
-                </div>
-                <div class="progress-meta">
-                    <span>@activeJob.DiscLabel</span>
-                    <span>
+                    <div class="progress-bar">
                         @if (activeJob.RipProgress > 0)
                         {
-                            @activeJob.RipProgress.ToString("F1")<text>%</text>
+                            <div class="progress-fill" style="width: @activeJob.RipProgress.ToString("F1")%"></div>
                         }
                         else if (activeJob.RipBytesRead > 0)
                         {
-                            <text>Ripping</text>
+                            <div class="progress-fill progress-indeterminate"></div>
                         }
-                    </span>
-                </div>
-
-                @if (ripExpanded)
-                {
-                    <div class="rip-details">
-                        <div class="rip-stat-grid">
-                            <div class="rip-stat">
-                                <span class="rip-stat-label">Progress</span>
-                                <span class="rip-stat-value">
-                                    @if (activeJob.RipProgress > 0)
-                                    {
-                                        @activeJob.RipProgress.ToString("F1")<text>%</text>
-                                    }
-                                    else if (activeJob.RipBytesRead > 0)
-                                    {
-                                        <text>Ripping…</text>
-                                    }
-                                    else
-                                    {
-                                        <text>—</text>
-                                    }
-                                </span>
-                            </div>
-                            <div class="rip-stat">
-                                <span class="rip-stat-label">Elapsed</span>
-                                <span class="rip-stat-value">@activeJob.RipElapsed</span>
-                            </div>
-                            <div class="rip-stat">
-                                <span class="rip-stat-label">Speed</span>
-                                <span class="rip-stat-value">@(string.IsNullOrEmpty(activeJob.RipSpeed) ? "—" : activeJob.RipSpeed)</span>
-                            </div>
-                            <div class="rip-stat">
-                                <span class="rip-stat-label">ETA</span>
-                                <span class="rip-stat-value">@(string.IsNullOrEmpty(activeJob.RipEta) ? "—" : activeJob.RipEta)</span>
-                            </div>
-                            <div class="rip-stat">
-                                <span class="rip-stat-label">Read</span>
-                                <span class="rip-stat-value">@FormatBytes(activeJob.RipBytesRead)</span>
-                            </div>
-                            <div class="rip-stat">
-                                <span class="rip-stat-label">Output</span>
-                                <span class="rip-stat-value mono">@activeJob.OutputDir</span>
-                            </div>
-                        </div>
-                        <button class="btn btn-cancel" @onclick="() => CancelRip(activeJob)" @onclick:stopPropagation="true">
-                            Cancel
-                        </button>
                     </div>
-                }
-                @if (!string.IsNullOrEmpty(activeJob.ErrorMessage))
-                {
-                    <p class="history-error">@activeJob.ErrorMessage</p>
-                }
-            </div>
+                    <div class="progress-meta">
+                        <span>@activeJob.DiscLabel</span>
+                        <span>
+                            @if (activeJob.RipProgress > 0)
+                            {
+                                @activeJob.RipProgress.ToString("F1")<text>%</text>
+                            }
+                            else if (activeJob.RipBytesRead > 0)
+                            {
+                                <text>Ripping</text>
+                            }
+                        </span>
+                    </div>
+
+                    @if (ripExpanded)
+                    {
+                        <div class="rip-details">
+                            <div class="rip-stat-grid">
+                                <div class="rip-stat">
+                                    <span class="rip-stat-label">Progress</span>
+                                    <span class="rip-stat-value">
+                                        @if (activeJob.RipProgress > 0)
+                                        {
+                                            @activeJob.RipProgress.ToString("F1")<text>%</text>
+                                        }
+                                        else if (activeJob.RipBytesRead > 0)
+                                        {
+                                            <text>Ripping…</text>
+                                        }
+                                        else
+                                        {
+                                            <text>—</text>
+                                        }
+                                    </span>
+                                </div>
+                                <div class="rip-stat">
+                                    <span class="rip-stat-label">Elapsed</span>
+                                    <span class="rip-stat-value">@activeJob.RipElapsed</span>
+                                </div>
+                                <div class="rip-stat">
+                                    <span class="rip-stat-label">Speed</span>
+                                    <span class="rip-stat-value">@(string.IsNullOrEmpty(activeJob.RipSpeed) ? "—" : activeJob.RipSpeed)</span>
+                                </div>
+                                <div class="rip-stat">
+                                    <span class="rip-stat-label">ETA</span>
+                                    <span class="rip-stat-value">@(string.IsNullOrEmpty(activeJob.RipEta) ? "—" : activeJob.RipEta)</span>
+                                </div>
+                                <div class="rip-stat">
+                                    <span class="rip-stat-label">Read</span>
+                                    <span class="rip-stat-value">@FormatBytes(activeJob.RipBytesRead)</span>
+                                </div>
+                                <div class="rip-stat">
+                                    <span class="rip-stat-label">Output</span>
+                                    <span class="rip-stat-value mono">@activeJob.OutputDir</span>
+                                </div>
+                            </div>
+                            <button class="btn btn-cancel" @onclick="() => CancelRip(activeJob)" @onclick:stopPropagation="true">
+                                Cancel
+                            </button>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(activeJob.ErrorMessage))
+                    {
+                        <p class="history-error">@activeJob.ErrorMessage</p>
+                    }
+                </div>
+            }
         </div>
     }
 
@@ -405,7 +408,7 @@
 
     private Dictionary<string, string> movieNames = new();
 
-    private RipJob? activeJob;
+    private List<RipJob> activeJobs = new();
     private List<RipJob> processingJobs = new();
     private RipJob? processingJob;
     private bool ripExpanded = true;
@@ -439,17 +442,18 @@
         {
             await Task.Delay(500, ct);
             _pollCount++;
-            var prev = activeJob;
+            var prevCount = activeJobs.Count;
+            string prevStatuses = string.Join("|", activeJobs.Select(j => $"{j.Id}:{j.Status}"));
             RefreshOrchestratorState();
-            if (activeJob != prev || activeJob?.Status != prev?.Status || _pollCount % 6 == 0)
+            var newStatuses = string.Join("|", activeJobs.Select(j => $"{j.Id}:{j.Status}"));
+            if (activeJobs.Count != prevCount || newStatuses != prevStatuses || _pollCount % 6 == 0)
                 StateHasChanged();
         }
     }
 
     private void OnJobUpdated(RipJob job)
     {
-        activeJob = job;
-        _ = InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(() => { RefreshOrchestratorState(); StateHasChanged(); });
     }
 
     private void OnStateChanged()
@@ -460,7 +464,7 @@
 
     private void RefreshOrchestratorState()
     {
-        activeJob = Orchestrator.ActiveRip;
+        activeJobs = Orchestrator.ActiveRips.ToList();
         processingJob = Orchestrator.ActiveProcessing;
         processingJobs = Orchestrator.ProcessingJobs.ToList();
     }
@@ -538,7 +542,7 @@
                 if (movieNames.TryGetValue(drive.DevicePath, out var current) && current == drive.Label)
                     movieNames[drive.DevicePath] = result.Title;
 
-                if (SettingsService.Current?.AutoStartRip == true && activeJob == null)
+                if (SettingsService.Current?.AutoStartRip == true && !Orchestrator.IsDeviceRipping(drive.DevicePath))
                     _ = StartRip(drive);
             }
             else

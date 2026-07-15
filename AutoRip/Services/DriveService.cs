@@ -12,6 +12,7 @@ public class DriveService : IDisposable
     private Task? _pollingTask;
 
     private readonly Dictionary<string, DiscInfo> _drives = new();
+    private readonly HashSet<string> _busyDevices = new();
     private bool _hasPolled;
     private readonly Lock _lock = new();
 
@@ -33,16 +34,19 @@ public class DriveService : IDisposable
         _logger = logger;
     }
 
-    public async Task PausePollingAsync()
+    public bool IsBusy(string device)
     {
-        await _pollLock.WaitAsync();
-        _logger.LogDebug("Drive polling paused");
+        lock (_lock) return _busyDevices.Contains(device);
     }
 
-    public void ResumePolling()
+    public void SetDeviceBusy(string device, bool busy)
     {
-        try { _pollLock.Release(); } catch (SemaphoreFullException) { }
-        _logger.LogDebug("Drive polling resumed");
+        lock (_lock)
+        {
+            if (busy) _busyDevices.Add(device);
+            else _busyDevices.Remove(device);
+        }
+        _logger.LogDebug("Drive {Device} busy={Busy}", device, busy);
     }
 
     public void StartPolling(TimeSpan? interval = null)
@@ -107,6 +111,10 @@ public class DriveService : IDisposable
 
             foreach (var device in devices)
             {
+                bool busy;
+                lock (_lock) busy = _busyDevices.Contains(device);
+                if (busy) continue;
+
                 var model = await ReadDriveModelAsync(device);
                 var hasMedia = await CheckMediaAsync(device);
 

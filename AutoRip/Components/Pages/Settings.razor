@@ -167,6 +167,12 @@
                     <span>Auto-start rip when disc is inserted</span>
                 </label>
             </div>
+
+            <div class="form-group">
+                <label for="maxParallelRips">Max Parallel Rips</label>
+                <input id="maxParallelRips" type="number" min="0" step="1" class="text-input" @bind="maxParallelRips" />
+                <p class="hint">Maximum number of concurrent rips. 0 = no limit (naturally capped by the number of drives).</p>
+            </div>
         </div>
 
         <div class="card">
@@ -202,6 +208,7 @@
     private bool autoDeleteMkv = true;
     private bool autoEject = true;
     private bool autoStartRip = false;
+    private int maxParallelRips = 0;
     private bool saved;
 
     private bool useCustom;
@@ -232,8 +239,9 @@
             outputDir = settings.OutputDirectory;
             autoDeleteMkv = settings.AutoDeleteMkv;
             autoEject = settings.AutoEjectAfterRip;
-            autoStartRip = settings.AutoStartRip;
-            useCustom = settings.UseCustomHandbrake;
+autoStartRip = settings.AutoStartRip;
+        maxParallelRips = settings.MaxParallelRips;
+        useCustom = settings.UseCustomHandbrake;
             selectedPreset = settings.HandbrakePreset;
             selectedEncoder = settings.HandbrakeEncoder ?? "x264";
             quality = settings.HandbrakeQuality;
@@ -260,6 +268,7 @@
         SettingsService.Current.AutoDeleteMkv = autoDeleteMkv;
         SettingsService.Current.AutoEjectAfterRip = autoEject;
         SettingsService.Current.AutoStartRip = autoStartRip;
+        SettingsService.Current.MaxParallelRips = maxParallelRips;
         SettingsService.Current.UseCustomHandbrake = useCustom;
         SettingsService.Current.HandbrakePreset = selectedPreset;
         SettingsService.Current.HandbrakeEncoder = selectedEncoder;

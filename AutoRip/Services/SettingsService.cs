@@ -44,6 +44,7 @@ public class SettingsService
                 case "AutoDeleteMkv": Current.AutoDeleteMkv = entry.Value == "true"; break;
                 case "AutoEjectAfterRip": Current.AutoEjectAfterRip = entry.Value != "false"; break;
                 case "AutoStartRip": Current.AutoStartRip = entry.Value == "true"; break;
+                case "MaxParallelRips": Current.MaxParallelRips = int.TryParse(entry.Value, out var mpr) ? mpr : 0; break;
                 case "ExtractAllSubtitles": Current.ExtractAllSubtitles = entry.Value == "true"; break;
                 case "PreferredSubtitleLanguages":
                     if (!string.IsNullOrWhiteSpace(entry.Value))
@@ -94,6 +95,7 @@ public class SettingsService
             ["AutoDeleteMkv"] = Current.AutoDeleteMkv.ToString().ToLower(),
             ["AutoEjectAfterRip"] = Current.AutoEjectAfterRip.ToString().ToLower(),
             ["AutoStartRip"] = Current.AutoStartRip.ToString().ToLower(),
+            ["MaxParallelRips"] = Current.MaxParallelRips.ToString(),
             ["ExtractAllSubtitles"] = Current.ExtractAllSubtitles.ToString().ToLower(),
             ["PreferredSubtitleLanguages"] = string.Join(",", Current.PreferredSubtitleLanguages),
             ["OcrVobSub"] = Current.OcrVobSub.ToString().ToLower(),

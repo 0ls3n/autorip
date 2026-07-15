@@ -14,6 +14,10 @@ public class HandbrakeService
         _logger = logger;
     }
 
+    private static readonly TimeSpan StallTimeout = TimeSpan.FromMinutes(5);
+    private const int StallCheckIntervalMs = 30000;
+    private const int RecentLineBufferSize = 60;
+
     public async Task<string> TranscodeAsync(
         string inputPath,
         string outputDir,
@@ -33,42 +37,127 @@ public class HandbrakeService
         var fpsRegex = new Regex(@"\((\d+\.\d+) fps");
         int lastPercent = -1;
 
-        var result = await _runner.RunWithProgressAsync(
-            "HandBrakeCLI",
-            args,
-            onOutput: null,
-            onError: line =>
+        void HandleLine(string line)
+        {
+            _logger.LogTrace("HandBrakeCLI: {Line}", line);
+            AppendRecent(line);
+
+            var match = progressRegex.Match(line);
+            if (match.Success)
             {
-                var match = progressRegex.Match(line);
-                if (match.Success)
+                var percent = double.Parse(match.Groups[1].Value,
+                    System.Globalization.CultureInfo.InvariantCulture);
+                var pct = (int)percent;
+                if (pct != lastPercent)
                 {
-                    var percent = double.Parse(match.Groups[1].Value,
-                        System.Globalization.CultureInfo.InvariantCulture);
-                    var pct = (int)percent;
-                    if (pct != lastPercent)
-                    {
-                        lastPercent = pct;
-                        double? fps = null;
-                        var fpsMatch = fpsRegex.Match(line);
-                        if (fpsMatch.Success)
-                            fps = double.Parse(fpsMatch.Groups[1].Value,
-                                System.Globalization.CultureInfo.InvariantCulture);
-                        onProgress?.Invoke(percent, fps);
-                    }
+                    lastPercent = pct;
+                    double? fps = null;
+                    var fpsMatch = fpsRegex.Match(line);
+                    if (fpsMatch.Success)
+                        fps = double.Parse(fpsMatch.Groups[1].Value,
+                            System.Globalization.CultureInfo.InvariantCulture);
+                    onProgress?.Invoke(percent, fps);
                 }
-            },
-            ct: ct,
-            timeout: TimeSpan.FromHours(12));
+            }
+        }
+        return await RunTranscodeWithStallGuardAsync(inputPath, outputPath, args, HandleLine, ct);
+    }
+
+    private async Task<string> RunTranscodeWithStallGuardAsync(
+        string inputPath,
+        string outputPath,
+        string args,
+        Action<string> handleLine,
+        CancellationToken ct)
+    {
+        using var stallCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        stallCts.CancelAfter(TimeSpan.FromHours(12));
+
+        var stallWatcher = WatchOutputStallAsync(outputPath, stallCts.Token);
+
+        ProcessRunner.ProcessResult result;
+        try
+        {
+            result = await _runner.RunWithProgressAsync(
+                "HandBrakeCLI",
+                args,
+                onOutput: handleLine,
+                onError: handleLine,
+                ct: stallCts.Token,
+                timeout: TimeSpan.FromHours(12));
+        }
+        catch (OperationCanceledException) when (stallCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            throw new InvalidOperationException(
+                $"HandBrakeCLI transcode stalled (output file unchanged for {StallTimeout.TotalMinutes:F0} min). " +
+                $"Recent output:\n{GetRecentOutput()}");
+        }
+        finally
+        {
+            stallCts.Cancel();
+            try { await stallWatcher; } catch (OperationCanceledException) { }
+        }
 
         if (result.ExitCode != 0)
             throw new InvalidOperationException(
-                $"HandBrakeCLI transcode failed (exit {result.ExitCode}): {result.StdErr}");
+                $"HandBrakeCLI transcode failed (exit {result.ExitCode}): {result.StdErr}" +
+                $"\nRecent output:\n{GetRecentOutput()}");
 
         if (!File.Exists(outputPath))
             throw new InvalidOperationException("Output .mp4 was not created");
 
         _logger.LogInformation("Transcode complete: {Path}", outputPath);
         return outputPath;
+    }
+
+    private async Task WatchOutputStallAsync(string outputPath, CancellationToken ct)
+    {
+        long lastSize = -1;
+        DateTime lastChange = DateTime.Now;
+
+        await Task.Delay(StallCheckIntervalMs, ct).ContinueWith(_ => { }, ct, TaskContinuationOptions.OnlyOnCanceled, TaskScheduler.Default);
+
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                long currentSize = File.Exists(outputPath) ? new FileInfo(outputPath).Length : 0;
+                if (currentSize > lastSize)
+                {
+                    lastSize = currentSize;
+                    lastChange = DateTime.Now;
+                }
+                else if (DateTime.Now - lastChange >= StallTimeout)
+                {
+                    _logger.LogWarning("Transcode stall detected: {Path} unchanged for {Min} min", outputPath, StallTimeout.TotalMinutes);
+                    ct.ThrowIfCancellationRequested();
+                }
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { _logger.LogTrace(ex, "Stall watcher error"); }
+
+            try { await Task.Delay(StallCheckIntervalMs, ct); }
+            catch (OperationCanceledException) { return; }
+        }
+    }
+
+    private readonly object _recentLock = new();
+    private readonly LinkedList<string> _recentLines = new();
+
+    private void AppendRecent(string line)
+    {
+        lock (_recentLock)
+        {
+            _recentLines.AddLast(line);
+            while (_recentLines.Count > RecentLineBufferSize)
+                _recentLines.RemoveFirst();
+        }
+    }
+
+    private string GetRecentOutput()
+    {
+        lock (_recentLock)
+            return string.Join("\n", _recentLines);
     }
 
     private static string BuildArgs(string input, string output, Settings settings)
