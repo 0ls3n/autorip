@@ -16,6 +16,7 @@ public class TransferService
         RipJob job,
         Settings settings,
         Action<string>? onLog = null,
+        Action<double, string>? onProgress = null,
         CancellationToken ct = default)
     {
         if (job.Mp4Path is null || !File.Exists(job.Mp4Path))
@@ -25,22 +26,39 @@ public class TransferService
         if (mode == TransferMode.None) return;
 
         var destinations = new List<string>();
+        var totalSteps = (mode is TransferMode.Sftp or TransferMode.Both ? 1 : 0)
+                       + (mode is TransferMode.LocalCopy or TransferMode.Both ? 1 : 0);
+        var step = 0;
 
         if (mode is TransferMode.Sftp or TransferMode.Both)
         {
-            var remote = await UploadSftpAsync(job.Mp4Path, settings, ct);
+            var remote = await UploadSftpAsync(job.Mp4Path, settings, percent =>
+            {
+                var overall = totalSteps == 1 ? percent : (step + percent / 100.0) / totalSteps * 100.0;
+                onProgress?.Invoke(overall, settings.SftpHost ?? string.Empty);
+            }, ct);
             destinations.Add($"sftp://{settings.SftpHost}:{settings.SftpPort}{remote}");
             onLog?.Invoke($"Uploaded via SFTP: {remote}");
+            step++;
+        }
+        else
+        {
+            onProgress?.Invoke(0, string.Empty);
         }
 
         if (mode is TransferMode.LocalCopy or TransferMode.Both)
         {
-            var local = await CopyLocalAsync(job.Mp4Path, settings.LocalCopyPath, ct);
+            var local = await CopyLocalAsync(job.Mp4Path, settings.LocalCopyPath, percent =>
+            {
+                var overall = totalSteps == 1 ? percent : (step + percent / 100.0) / totalSteps * 100.0;
+                onProgress?.Invoke(overall, "local");
+            }, ct);
             destinations.Add($"file://{local}");
             onLog?.Invoke($"Saved local copy: {local}");
         }
 
         job.TransferPaths = destinations;
+        onProgress?.Invoke(100, string.Empty);
     }
 
     public async Task<IReadOnlyList<string>> ListSftpDirectoriesAsync(string remotePath, Settings settings, CancellationToken ct = default)
@@ -77,6 +95,65 @@ public class TransferService
         }, ct);
     }
 
+    public Task<(string Path, IReadOnlyList<string> Dirs, IReadOnlyList<string> Special)> ResolveLocalAsync(string path)
+    {
+        return Task.Run(() =>
+        {
+            var expanded = ExpandDisplayPath(path);
+            var special = EnumerateDrives();
+            var dirs = new List<string>();
+
+            if (!string.IsNullOrEmpty(expanded))
+            {
+                try
+                {
+                    var info = new DirectoryInfo(expanded);
+                    if (info.Exists)
+                    {
+                        foreach (var sub in info.EnumerateDirectories())
+                        {
+                            try { dirs.Add(sub.Name); }
+                            catch (UnauthorizedAccessException) { /* skip */ }
+                            catch (IOException) { /* skip */ }
+                        }
+                        dirs.Sort(StringComparer.Ordinal);
+                    }
+                }
+                catch (UnauthorizedAccessException) { /* treat as no access */ }
+                catch (IOException) { /* treat as missing */ }
+            }
+
+            return (expanded, (IReadOnlyList<string>)dirs, (IReadOnlyList<string>)special);
+        });
+    }
+
+    private static IReadOnlyList<string> EnumerateDrives()
+    {
+        var drives = new List<string>();
+        try
+        {
+            foreach (var d in DriveInfo.GetDrives())
+            {
+                try { if (d.IsReady) drives.Add(d.Name.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)); }
+                catch { /* skip */ }
+            }
+        }
+        catch { /* skip */ }
+        return drives;
+    }
+
+    private static string ExpandDisplayPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return string.Empty;
+        var expanded = ExpandPath(path);
+        if (Directory.Exists(expanded)) return Path.GetFullPath(expanded);
+
+        var parent = Directory.GetParent(expanded);
+        while (parent != null && !parent.Exists)
+            parent = parent.Parent;
+        return parent?.FullName ?? string.Empty;
+    }
+
     public async Task<string> TestSftpConnectionAsync(Settings settings, CancellationToken ct = default)
     {
         ValidateSftpSettings(settings);
@@ -105,7 +182,7 @@ public class TransferService
         }, ct);
     }
 
-    private async Task<string> UploadSftpAsync(string filePath, Settings settings, CancellationToken ct)
+    private async Task<string> UploadSftpAsync(string filePath, Settings settings, Action<double> onProgress, CancellationToken ct)
     {
         ValidateSftpSettings(settings);
         var conn = BuildSftpConnection(settings);
@@ -126,7 +203,11 @@ public class TransferService
                 _logger.LogInformation("Uploading {File} to {Host}:{Path} ({Size})", fileName, settings.SftpHost, remoteFile, fileInfo.Length);
 
                 using var stream = File.OpenRead(filePath);
-                client.UploadFile(stream, remoteFile);
+                client.UploadFile(stream, remoteFile, offset =>
+                {
+                    if (fileInfo.Length > 0)
+                        onProgress(offset * 100.0 / fileInfo.Length);
+                });
             }
             finally
             {
@@ -184,7 +265,7 @@ public class TransferService
         }
     }
 
-    private static async Task<string> CopyLocalAsync(string filePath, string destDir, CancellationToken ct)
+    private static async Task<string> CopyLocalAsync(string filePath, string destDir, Action<double> onProgress, CancellationToken ct)
     {
         var expanded = ExpandPath(destDir);
         Directory.CreateDirectory(expanded);
@@ -192,7 +273,18 @@ public class TransferService
         var dest = Path.Combine(expanded, Path.GetFileName(filePath));
         await using var src = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
         await using var dst = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
-        await src.CopyToAsync(dst, 81920, ct);
+
+        var total = src.Length;
+        var buffer = new byte[81920];
+        int read;
+        long written = 0;
+        while ((read = await src.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
+        {
+            await dst.WriteAsync(buffer, 0, read, ct);
+            written += read;
+            if (total > 0) onProgress(written * 100.0 / total);
+        }
+
         return dest;
     }
 

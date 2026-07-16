@@ -253,8 +253,13 @@
 
     @if (processingJob != null)
     {
+        var isTransferring = processingJob.Status == RipStatus.Transferring;
+        var sectionTitle = isTransferring ? "Transferring" : "Transcoding";
+        var progress = isTransferring ? processingJob.TransferProgress : processingJob.ProcessingProgress;
+        var target = isTransferring ? processingJob.TransferTarget : string.Empty;
+
         <div class="active-rip-section">
-            <h3 class="history-heading">Transcoding</h3>
+            <h3 class="history-heading">@sectionTitle</h3>
             <div class="card rip-progress-card @(procExpanded ? "rip-expanded" : "")"
                  @onclick="() => procExpanded = !procExpanded">
                 <div class="rip-progress-header">
@@ -265,9 +270,9 @@
                     <span class="rip-expand-icon">@(procExpanded ? "▲" : "▼")</span>
                 </div>
                 <div class="progress-bar">
-                    @if (processingJob.ProcessingProgress > 0)
+                    @if (progress > 0)
                     {
-                        <div class="progress-fill" style="width: @processingJob.ProcessingProgress.ToString("F1")%"></div>
+                        <div class="progress-fill" style="width: @progress.ToString("F1")%"></div>
                     }
                     else
                     {
@@ -275,11 +280,20 @@
                     }
                 </div>
                 <div class="progress-meta">
-                    <span>@processingJob.DiscLabel</span>
                     <span>
-                        @if (processingJob.ProcessingProgress > 0)
+                        @if (isTransferring && !string.IsNullOrEmpty(target))
                         {
-                            @processingJob.ProcessingProgress.ToString("F1")<text>%</text>
+                            <text>Transferring to @target</text>
+                        }
+                        else
+                        {
+                            @processingJob.DiscLabel
+                        }
+                    </span>
+                    <span>
+                        @if (progress > 0)
+                        {
+                            @progress.ToString("F1")<text>%</text>
                         }
                         else
                         {
@@ -298,18 +312,23 @@
             <div class="history-list">
                 @foreach (var job in processingJobs)
                 {
+                    var jobProgress = job.Status == RipStatus.Transferring ? job.TransferProgress : job.ProcessingProgress;
+                    var jobLabel = job.Status == RipStatus.Transferring && !string.IsNullOrEmpty(job.TransferTarget)
+                        ? $"Transferring to {job.TransferTarget}"
+                        : job.DiscLabel;
+
                     <div class="card history-card">
                         <div class="history-row">
                             <div class="history-info">
                                 <span class="history-title">@job.MovieName</span>
-                                <span class="history-label">@job.DiscLabel</span>
+                                <span class="history-label">@jobLabel</span>
                             </div>
                             <span class="badge @StatusBadgeClass(job.Status)">@job.Status</span>
                         </div>
                         @if (job.Status != RipStatus.Completed && job.Status != RipStatus.Failed)
                         {
                             <div class="progress-bar" style="margin-top: 8px;">
-                                <div class="progress-fill" style="width: @job.ProcessingProgress%"></div>
+                                <div class="progress-fill" style="width: @jobProgress.ToString("F1")%"></div>
                             </div>
                         }
                         @if (!string.IsNullOrEmpty(job.ErrorMessage))

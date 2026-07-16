@@ -418,6 +418,8 @@ public class RipOrchestrator : IHostedService, IDisposable
         }
 
         await UpdateJobStatusAsync(job, RipStatus.Transferring);
+        job.TransferProgress = 0;
+        job.TransferTarget = _settings.Current.SftpHost ?? "local";
         StateChanged?.Invoke();
         JobUpdated?.Invoke(job);
 
@@ -428,7 +430,15 @@ public class RipOrchestrator : IHostedService, IDisposable
             job,
             _settings.Current,
             onLog: msg => _ = LogToJobAsync(job.Id, "Info", msg),
+            onProgress: (percent, target) =>
+            {
+                job.TransferProgress = percent;
+                if (!string.IsNullOrEmpty(target)) job.TransferTarget = target;
+                JobUpdated?.Invoke(job);
+            },
             ct: CancellationToken.None);
+
+        job.TransferProgress = 100;
 
         foreach (var path in new[] { job.Mp4Path, job.MkvPath })
             if (!string.IsNullOrEmpty(path) && File.Exists(path))

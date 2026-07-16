@@ -69,6 +69,9 @@ public class RipJob
 
     [NotMapped] public List<string> TransferPaths { get; set; } = new();
 
+    [NotMapped] public double TransferProgress { get; set; }
+    [NotMapped] public string TransferTarget { get; set; } = string.Empty;
+
     [NotMapped] public DateTime RipStartedAt { get; set; }
     [NotMapped] public string RipElapsed => (DateTime.Now - RipStartedAt).ToString(@"h\:mm\:ss");
     [NotMapped] public string RipEta { get; set; } = string.Empty;

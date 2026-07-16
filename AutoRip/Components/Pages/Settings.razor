@@ -182,7 +182,14 @@
 
             <div class="form-group">
                 <label for="outputDir">Working Directory</label>
-                <input id="outputDir" type="text" class="text-input" @bind="outputDir" />
+                <div class="input-row">
+                    <input id="outputDir" type="text" class="text-input" @bind="outputDir" />
+                    <button class="btn btn-icon" title="Browse local folders" @onclick="OpenLocalBrowserOutput">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M1.5 4.5C1.5 3.67 2.17 3 3 3h3l1.5 1.5H13c.83 0 1.5.67 1.5 1.5v6c0 .83-.67 1.5-1.5 1.5H3c-.83 0-1.5-.67-1.5-1.5v-7.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
                 <p class="hint">Local workspace for ripping and transcoding. Files left here are removed once delivered elsewhere (see below).</p>
             </div>
 
@@ -289,7 +296,14 @@
 
                 <div class="form-group">
                     <label for="localCopyPath">Destination folder</label>
-                    <input id="localCopyPath" type="text" class="text-input" @bind="localCopyPath" placeholder="~/Videos/Converted" />
+                    <div class="input-row">
+                        <input id="localCopyPath" type="text" class="text-input" @bind="localCopyPath" placeholder="~/Videos/Converted" />
+                        <button class="btn btn-icon" title="Browse local folders" @onclick="OpenLocalBrowserLocalCopy">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path d="M1.5 4.5C1.5 3.67 2.17 3 3 3h3l1.5 1.5H13c.83 0 1.5.67 1.5 1.5v6c0 .83-.67 1.5-1.5 1.5H3c-.83 0-1.5-.67-1.5-1.5v-7.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
                     <p class="hint">The finished .mp4 is moved here. Folder is created if it doesn't exist.</p>
                 </div>
             }
@@ -368,6 +382,88 @@
             </div>
         </div>
     }
+
+    @if (showLocalBrowser)
+    {
+        <div class="modal-overlay" @onclick="CloseLocalBrowser">
+            <div class="modal-content sftp-modal" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h2>Browse Local Folders</h2>
+                    <button class="modal-close" @onclick="CloseLocalBrowser">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="sftp-browser-bar">
+                        <button class="btn btn-icon" title="Up one level" @onclick="LocalBrowserUp"
+                                disabled="@(localBrowserLoading || !CanGoUpLocal())">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path d="M8 3l5 5H10v5H6V8H3l5-5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <span class="mono sftp-browser-path">@LocalBrowserDisplayPath</span>
+                        <button class="btn btn-secondary sftp-refresh" title="Refresh" @onclick="() => LocalBrowserRefresh()"
+                                disabled="@localBrowserLoading">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                <path d="M13 8a5 5 0 1 1-1.46-3.54" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                <path d="M13 2v3h-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="sftp-browser-list">
+                        @if (localBrowserLoading)
+                        {
+                            <div class="sftp-browser-state">
+                                <div class="spinner"></div>
+                                <span>Loading…</span>
+                            </div>
+                        }
+                        else if (!string.IsNullOrEmpty(localBrowserError))
+                        {
+                            <p class="history-error sftp-browser-error">@localBrowserError</p>
+                            <button class="btn btn-secondary" @onclick="() => LocalBrowserRefresh()">Try again</button>
+                        }
+                        else
+                        {
+                            @if (localBrowserSpecial.Count > 0)
+                            {
+                                <div class="local-browser-section-label">Drives</div>
+                                @foreach (var drive in localBrowserSpecial)
+                                {
+                                    var driveName = drive;
+                                    <button class="sftp-browser-entry" @onclick="() => LocalBrowserJump(driveName)">
+                                        <span class="folder-ico">💾</span>
+                                        <span class="sftp-browser-name">@driveName</span>
+                                    </button>
+                                }
+                            }
+
+                            @if (localBrowserDirs.Count == 0)
+                            {
+                                <p class="sftp-browser-state muted">No subfolders here.</p>
+                            }
+                            else
+                            {
+                                <div class="local-browser-section-label">Folders</div>
+                                @foreach (var dir in localBrowserDirs)
+                                {
+                                    var dirName = dir;
+                                    <button class="sftp-browser-entry" @onclick="() => LocalBrowserInto(dirName)">
+                                        <span class="folder-ico">📁</span>
+                                        <span class="sftp-browser-name">@dirName</span>
+                                    </button>
+                                }
+                            }
+                        }
+                    </div>
+
+                    <div class="sftp-browser-actions">
+                        <button class="btn btn-secondary" @onclick="CloseLocalBrowser">Cancel</button>
+                        <button class="btn btn-primary" @onclick="SelectLocalFolder" disabled="@(string.IsNullOrEmpty(localBrowserPath))">Select this folder</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -410,6 +506,15 @@
     private List<string> sftpBrowserDirs = new();
     private bool sftpBrowserLoading;
     private string sftpBrowserError = string.Empty;
+
+    private bool showLocalBrowser;
+    private string localBrowserTarget = string.Empty;
+    private string localBrowserPath = string.Empty;
+    private string localBrowserOriginal = string.Empty;
+    private List<string> localBrowserDirs = new();
+    private List<string> localBrowserSpecial = new();
+    private bool localBrowserLoading;
+    private string localBrowserError = string.Empty;
 
     private static readonly string[] encoderOptions =
     {
@@ -621,5 +726,121 @@ autoStartRip = settings.AutoStartRip;
         var idx = trimmed.LastIndexOf('/');
         if (idx <= 0) return "/";
         return trimmed[..idx];
+    }
+
+    private string LocalBrowserDisplayPath => string.IsNullOrEmpty(localBrowserPath) ? "/" : localBrowserPath;
+
+    private Task OpenLocalBrowserOutput() => OpenLocalBrowser("outputDir");
+
+    private Task OpenLocalBrowserLocalCopy() => OpenLocalBrowser("localCopyPath");
+
+    private async Task OpenLocalBrowser(string target)
+    {
+        showLocalBrowser = true;
+        localBrowserTarget = target;
+        localBrowserOriginal = target == "outputDir" ? outputDir : localCopyPath;
+        localBrowserError = string.Empty;
+        localBrowserDirs = new();
+        localBrowserSpecial = new();
+        StateHasChanged();
+        await LocalBrowserLoad();
+    }
+
+    private void CloseLocalBrowser()
+    {
+        showLocalBrowser = false;
+        localBrowserError = string.Empty;
+        localBrowserDirs = new();
+        localBrowserSpecial = new();
+    }
+
+    private async Task LocalBrowserRefresh() => await LocalBrowserLoad();
+
+    private async Task LocalBrowserInto(string dir)
+    {
+        localBrowserPath = SafeCombineLocal(localBrowserPath, dir);
+        await LocalBrowserLoad();
+    }
+
+    private async Task LocalBrowserJump(string drive)
+    {
+        localBrowserPath = drive;
+        await LocalBrowserLoad();
+    }
+
+    private async Task LocalBrowserUp()
+    {
+        localBrowserPath = ParentLocal(localBrowserPath);
+        await LocalBrowserLoad();
+    }
+
+    private async Task LocalBrowserLoad()
+    {
+        localBrowserLoading = true;
+        localBrowserError = string.Empty;
+        localBrowserDirs = new();
+        localBrowserSpecial = new();
+        StateHasChanged();
+
+        try
+        {
+            var seed = string.IsNullOrEmpty(localBrowserPath) ? localBrowserOriginal : localBrowserPath;
+            var (resolved, dirs, special) = await TransferService.ResolveLocalAsync(seed);
+            localBrowserPath = string.IsNullOrEmpty(resolved) ? localBrowserPath : resolved;
+            localBrowserDirs = dirs.ToList();
+            localBrowserSpecial = special.ToList();
+        }
+        catch (Exception ex)
+        {
+            localBrowserError = ex.Message;
+        }
+        finally
+        {
+            localBrowserLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SelectLocalFolder()
+    {
+        if (string.IsNullOrEmpty(localBrowserPath)) return;
+        var path = localBrowserPath;
+        if (!path.EndsWith(Path.DirectorySeparatorChar) && !path.EndsWith(Path.AltDirectorySeparatorChar))
+            path += Path.DirectorySeparatorChar;
+
+        if (localBrowserTarget == "outputDir")
+            outputDir = path;
+        else
+            localCopyPath = path;
+
+        CloseLocalBrowser();
+    }
+
+    private bool CanGoUpLocal()
+    {
+        if (string.IsNullOrEmpty(localBrowserPath)) return false;
+        try
+        {
+            var info = new DirectoryInfo(localBrowserPath).Parent;
+            return info != null;
+        }
+        catch { return false; }
+    }
+
+    private static string SafeCombineLocal(string parent, string child)
+    {
+        try { return Path.GetFullPath(Path.Combine(parent, child)); }
+        catch { return parent; }
+    }
+
+    private static string ParentLocal(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return string.Empty;
+        try
+        {
+            var parent = Directory.GetParent(path);
+            return parent?.FullName ?? path;
+        }
+        catch { return path; }
     }
 }
