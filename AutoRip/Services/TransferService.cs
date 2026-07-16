@@ -43,6 +43,40 @@ public class TransferService
         job.TransferPaths = destinations;
     }
 
+    public async Task<IReadOnlyList<string>> ListSftpDirectoriesAsync(string remotePath, Settings settings, CancellationToken ct = default)
+    {
+        ValidateSftpSettings(settings);
+        var conn = BuildSftpConnection(settings);
+        var normalized = NormalizeRemotePath(remotePath);
+        var root = normalized.Length == 0 ? "/" : normalized;
+
+        return await Task.Run(() =>
+        {
+            using var client = new SftpClient(conn);
+            client.Connect();
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                if (!client.Exists(root))
+                    throw new InvalidOperationException($"Remote path '{root}' does not exist.");
+
+                var dirs = new List<string>();
+                foreach (var entry in client.ListDirectory(root))
+                {
+                    if (entry.IsDirectory && entry.Name is not "." and not "..")
+                        dirs.Add(entry.Name);
+                }
+
+                dirs.Sort(StringComparer.Ordinal);
+                return (IReadOnlyList<string>)dirs;
+            }
+            finally
+            {
+                if (client.IsConnected) client.Disconnect();
+            }
+        }, ct);
+    }
+
     public async Task<string> TestSftpConnectionAsync(Settings settings, CancellationToken ct = default)
     {
         ValidateSftpSettings(settings);
