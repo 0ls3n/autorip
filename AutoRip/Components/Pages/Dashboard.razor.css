@@ -366,6 +366,10 @@
     transition: border-color var(--transition);
 }
 
+.rip-progress-card + .rip-progress-card {
+    margin-top: 10px;
+}
+
 .rip-progress-card:hover {
     border-color: var(--accent);
 }

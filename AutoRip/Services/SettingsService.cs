@@ -59,6 +59,7 @@ public class SettingsService
                 case "SftpPassword": Current.SftpPassword = entry.Value; break;
                 case "SftpKeyFile": Current.SftpKeyFile = entry.Value; break;
                 case "SftpRemotePath": Current.SftpRemotePath = entry.Value ?? "/media/"; break;
+                case "LocalCopyPath": Current.LocalCopyPath = entry.Value ?? Current.LocalCopyPath; break;
                 case "PostTransferMode":
                     Current.PostTransferMode = entry.Value switch
                     {
@@ -107,6 +108,7 @@ public class SettingsService
             ["SftpPassword"] = Current.SftpPassword,
             ["SftpKeyFile"] = Current.SftpKeyFile,
             ["SftpRemotePath"] = Current.SftpRemotePath,
+            ["LocalCopyPath"] = Current.LocalCopyPath,
             ["PostTransferMode"] = Current.PostTransferMode.ToString()
         };
 

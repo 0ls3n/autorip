@@ -67,6 +67,8 @@ public class RipJob
         set => MovieInfoJson = value != null ? JsonSerializer.Serialize(value) : null;
     }
 
+    [NotMapped] public List<string> TransferPaths { get; set; } = new();
+
     [NotMapped] public DateTime RipStartedAt { get; set; }
     [NotMapped] public string RipElapsed => (DateTime.Now - RipStartedAt).ToString(@"h\:mm\:ss");
     [NotMapped] public string RipEta { get; set; } = string.Empty;

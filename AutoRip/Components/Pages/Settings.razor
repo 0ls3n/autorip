@@ -3,6 +3,7 @@
 @using AutoRip.Services
 @inject SettingsService SettingsService
 @inject HandbrakeService HandbrakeService
+@inject TransferService TransferService
 @inject NavigationManager Navigation
 
 <PageTitle>Settings — AutoRip</PageTitle>
@@ -177,10 +178,12 @@
 
         <div class="card">
             <h2>Output</h2>
+            <p class="card-desc">Where rips and transcodes happen, and where the finished <code>.mp4</code> ends up.</p>
 
             <div class="form-group">
-                <label for="outputDir">Output Directory</label>
+                <label for="outputDir">Working Directory</label>
                 <input id="outputDir" type="text" class="text-input" @bind="outputDir" />
+                <p class="hint">Local workspace for ripping and transcoding. Files left here are removed once delivered elsewhere (see below).</p>
             </div>
 
             <div class="form-group">
@@ -189,6 +192,99 @@
                     <span>Delete .mkv after successful transcode</span>
                 </label>
             </div>
+
+            <hr class="card-divider" />
+            <h3 class="card-subheading">After Ripping</h3>
+
+            <div class="form-group">
+                <label for="postTransferMode">Action</label>
+                <div class="select-wrapper">
+                    <select id="postTransferMode" class="text-input" @bind="postTransferMode">
+                        <option value="None">Keep in working directory</option>
+                        <option value="Sftp">Upload to server via SFTP</option>
+                        <option value="LocalCopy">Save to a local folder</option>
+                        <option value="Both">SFTP upload + local folder</option>
+                    </select>
+                </div>
+                <p class="hint">
+                    @if (postTransferMode == "None")
+                    {
+                        <text>The finished .mp4 stays in the working directory.</text>
+                    }
+                    else
+                    {
+                        <text>After delivery, the .mp4 and any leftover .mkv are removed from the working directory.</text>
+                    }
+                </p>
+            </div>
+
+            @if (postTransferMode is "Sftp" or "Both")
+            {
+                <hr class="card-divider" />
+                <h3 class="card-subheading">SFTP Server</h3>
+
+                <div class="form-group">
+                    <label for="sftpHost">Host</label>
+                    <input id="sftpHost" type="text" class="text-input" @bind="sftpHost" placeholder="192.168.1.10" />
+                </div>
+
+                <div class="form-group">
+                    <label for="sftpPort">Port</label>
+                    <input id="sftpPort" type="number" min="1" max="65535" step="1" class="text-input" @bind="sftpPort" />
+                </div>
+
+                <div class="form-group">
+                    <label for="sftpUser">Username</label>
+                    <input id="sftpUser" type="text" class="text-input" @bind="sftpUser" placeholder="media" />
+                </div>
+
+                <div class="form-group">
+                    <label for="sftpPassword">Password</label>
+                    <input id="sftpPassword" type="password" class="text-input" @bind="sftpPassword" placeholder="••••••••" />
+                </div>
+
+                <div class="form-group">
+                    <label for="sftpRemotePath">Remote path</label>
+                    <input id="sftpRemotePath" type="text" class="text-input" @bind="sftpRemotePath" placeholder="/media/movies/" />
+                    <p class="hint">Folder on the server where the .mp4 will be uploaded. Created if it doesn't exist.</p>
+                </div>
+
+                <div class="form-group">
+                    <label for="sftpKeyFile">SSH key file (optional)</label>
+                    <input id="sftpKeyFile" type="text" class="text-input" @bind="sftpKeyFile" placeholder="~/.ssh/id_ed25519" />
+                    <p class="hint">If set and the file exists, key-based authentication is used instead of the password.</p>
+                </div>
+
+                <div class="form-group">
+                    <button class="btn btn-secondary" @onclick="TestSftpConnection" disabled="@sftpTesting">
+                        @if (sftpTesting)
+                        {
+                            <div class="spinner spinner-sm"></div>
+                            <text>Testing…</text>
+                        }
+                        else
+                        {
+                            <text>Test Connection</text>
+                        }
+                    </button>
+                    @if (!string.IsNullOrEmpty(sftpTestMessage))
+                    {
+                        <span style="margin-left: 1rem;" class="badge @(sftpTestSuccess == true ? "badge-green" : "badge-red") saved-badge">@sftpTestMessage</span>
+                    }
+                </div>
+            }
+
+            @if (postTransferMode is "LocalCopy" or "Both")
+            {
+                <hr class="card-divider" />
+                <h3 class="card-subheading">Local Destination</h3>
+
+                <div class="form-group">
+                    <label for="localCopyPath">Destination folder</label>
+                    <input id="localCopyPath" type="text" class="text-input" @bind="localCopyPath" placeholder="~/Videos/Converted" />
+                    <p class="hint">The finished .mp4 is moved here. Folder is created if it doesn't exist.</p>
+                </div>
+            }
         </div>
 
         <div class="settings-actions">
@@ -223,6 +319,19 @@
     private string framerate = "source";
     private bool cfr = false;
 
+    private string postTransferMode = "None";
+    private string sftpHost = string.Empty;
+    private int sftpPort = 22;
+    private string sftpUser = string.Empty;
+    private string sftpPassword = string.Empty;
+    private string sftpRemotePath = "/media/";
+    private string? sftpKeyFile;
+    private string localCopyPath = "~/Videos/Converted";
+
+    private bool sftpTesting;
+    private bool? sftpTestSuccess;
+    private string sftpTestMessage = string.Empty;
+
     private static readonly string[] encoderOptions =
     {
         "x264", "x265", "x264_10bit", "x265_10bit", "x265_12bit",
@@ -251,6 +360,15 @@ autoStartRip = settings.AutoStartRip;
             chapterMarkers = settings.HandbrakeMarkers;
             framerate = settings.HandbrakeFramerate ?? "source";
             cfr = settings.HandbrakeCfr;
+
+            postTransferMode = settings.PostTransferMode.ToString();
+            sftpHost = settings.SftpHost ?? string.Empty;
+            sftpPort = settings.SftpPort;
+            sftpUser = settings.SftpUser ?? string.Empty;
+            sftpPassword = settings.SftpPassword ?? string.Empty;
+            sftpRemotePath = settings.SftpRemotePath;
+            sftpKeyFile = settings.SftpKeyFile;
+            localCopyPath = settings.LocalCopyPath;
         }
 
         presets = await HandbrakeService.GetPresetsAsync();
@@ -280,10 +398,60 @@ autoStartRip = settings.AutoStartRip;
         SettingsService.Current.HandbrakeFramerate = framerate;
         SettingsService.Current.HandbrakeCfr = cfr;
 
+        SettingsService.Current.PostTransferMode = postTransferMode switch
+        {
+            "Sftp" => TransferMode.Sftp,
+            "LocalCopy" => TransferMode.LocalCopy,
+            "Both" => TransferMode.Both,
+            _ => TransferMode.None
+        };
+        SettingsService.Current.SftpHost = string.IsNullOrWhiteSpace(sftpHost) ? null : sftpHost.Trim();
+        SettingsService.Current.SftpPort = sftpPort > 0 ? sftpPort : 22;
+        SettingsService.Current.SftpUser = string.IsNullOrWhiteSpace(sftpUser) ? null : sftpUser.Trim();
+        SettingsService.Current.SftpPassword = string.IsNullOrWhiteSpace(sftpPassword) ? null : sftpPassword;
+        SettingsService.Current.SftpRemotePath = sftpRemotePath;
+        SettingsService.Current.SftpKeyFile = string.IsNullOrWhiteSpace(sftpKeyFile) ? null : sftpKeyFile.Trim();
+        SettingsService.Current.LocalCopyPath = string.IsNullOrWhiteSpace(localCopyPath) ? "~/Videos/Converted" : localCopyPath;
+
         await SettingsService.SaveAsync();
 
         saved = true;
         await Task.Delay(2000);
         saved = false;
+    }
+
+    private async Task TestSftpConnection()
+    {
+        sftpTesting = true;
+        sftpTestSuccess = null;
+        sftpTestMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var probe = new AutoRip.Models.Settings
+            {
+                SftpHost = sftpHost.Trim(),
+                SftpPort = sftpPort > 0 ? sftpPort : 22,
+                SftpUser = sftpUser.Trim(),
+                SftpPassword = sftpPassword,
+                SftpKeyFile = string.IsNullOrWhiteSpace(sftpKeyFile) ? null : sftpKeyFile.Trim(),
+                SftpRemotePath = sftpRemotePath
+            };
+
+            var remote = await TransferService.TestSftpConnectionAsync(probe);
+            sftpTestSuccess = true;
+            sftpTestMessage = $"Connected ({remote})";
+        }
+        catch (Exception ex)
+        {
+            sftpTestSuccess = false;
+            sftpTestMessage = ex.Message;
+        }
+        finally
+        {
+            sftpTesting = false;
+            StateHasChanged();
+        }
     }
 }

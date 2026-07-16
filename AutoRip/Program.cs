@@ -24,6 +24,7 @@ builder.Services.AddSingleton<ProcessRunner>();
 builder.Services.AddSingleton<MakeMkvService>();
 builder.Services.AddSingleton<HandbrakeService>();
 builder.Services.AddSingleton<DriveService>();
+builder.Services.AddSingleton<TransferService>();
 builder.Services.AddSingleton<RipOrchestrator>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RipOrchestrator>());
 builder.Services.AddHttpClient<TmdbService>();

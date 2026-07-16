@@ -308,70 +308,78 @@ public class RipOrchestrator : IHostedService, IDisposable
         }
     }
 
+    private int _processingRunning;
+
     private void EnqueueProcessing(RipJob job)
     {
         _processingQueue.Enqueue(job);
+        _ = UpdateJobStatusAsync(job, RipStatus.QueuedForProcessing);
         _ = ProcessQueueAsync();
     }
 
     private async Task ProcessQueueAsync()
     {
-        while (_processingQueue.TryDequeue(out var job))
+        if (Interlocked.CompareExchange(ref _processingRunning, 1, 0) != 0) return;
+        try
         {
-            await LogToJobAsync(job.Id, "Info", "Entered processing queue");
-            await UpdateJobStatusAsync(job, RipStatus.QueuedForProcessing);
-
-            try
+            while (_processingQueue.TryDequeue(out var job))
             {
-                ActiveProcessing = job;
-                StateChanged?.Invoke();
+                await LogToJobAsync(job.Id, "Info", "Entered processing queue");
 
-                await UpdateJobStatusAsync(job, RipStatus.Transcoding);
-                StateChanged?.Invoke();
-                JobUpdated?.Invoke(job);
-
-                using var scope = _scopeFactory.CreateScope();
-                var handbrake = scope.ServiceProvider.GetRequiredService<HandbrakeService>();
-
-                var mp4Path = await handbrake.TranscodeAsync(
-                    job.MkvPath!,
-                    job.OutputDir,
-                    job.MovieName,
-                    _settings.Current,
-                    onProgress: (percent, fps) =>
-                    {
-                        job.ProcessingProgress = percent;
-                        JobUpdated?.Invoke(job);
-                    },
-                    ct: CancellationToken.None);
-
-                job.Mp4Path = mp4Path;
-                job.ProcessingProgress = 100;
-
-                if (job.DeleteMkvAfterTranscode && File.Exists(job.MkvPath))
+                try
                 {
-                    try { File.Delete(job.MkvPath); }
-                    catch (Exception ex) { _logger.LogWarning(ex, "Failed to delete mkv: {Path}", job.MkvPath); }
+                    ActiveProcessing = job;
+                    StateChanged?.Invoke();
+
+                    await UpdateJobStatusAsync(job, RipStatus.Transcoding);
+                    StateChanged?.Invoke();
+                    JobUpdated?.Invoke(job);
+
+                    using var scope = _scopeFactory.CreateScope();
+                    var handbrake = scope.ServiceProvider.GetRequiredService<HandbrakeService>();
+
+                    var mp4Path = await handbrake.TranscodeAsync(
+                        job.MkvPath!,
+                        job.OutputDir,
+                        job.MovieName,
+                        _settings.Current,
+                        onProgress: (percent, fps) =>
+                        {
+                            job.ProcessingProgress = percent;
+                            JobUpdated?.Invoke(job);
+                        },
+                        ct: CancellationToken.None);
+
+                    job.Mp4Path = mp4Path;
+                    job.ProcessingProgress = 100;
+
+                    await TransferResultAsync(job);
+
+                    await UpdateJobStatusAsync(job, RipStatus.Completed);
+                    job.CompletedAt = DateTime.Now;
+
+                    await LogToJobAsync(job.Id, "Info", $"Transcode complete: {mp4Path}");
+                    if (job.TransferPaths.Count > 0)
+                        await LogToJobAsync(job.Id, "Info", "Transferred to: " + string.Join(", ", job.TransferPaths));
+                    _logger.LogInformation("Job completed: {Movie}", job.MovieName);
                 }
-
-                await UpdateJobStatusAsync(job, RipStatus.Completed);
-                job.CompletedAt = DateTime.Now;
-
-                await LogToJobAsync(job.Id, "Info", $"Transcode complete: {mp4Path}");
-                _logger.LogInformation("Job completed: {Movie}", job.MovieName);
+                catch (Exception ex)
+                {
+                    await UpdateJobStatusAsync(job, RipStatus.Failed, ex.Message);
+                    await LogToJobAsync(job.Id, "Error", $"Processing failed: {ex.Message}");
+                    _logger.LogError(ex, "Processing failed: {Movie}", job.MovieName);
+                }
+                finally
+                {
+                    ActiveProcessing = null;
+                    StateChanged?.Invoke();
+                    JobUpdated?.Invoke(job);
+                }
             }
-            catch (Exception ex)
-            {
-                await UpdateJobStatusAsync(job, RipStatus.Failed, ex.Message);
-                await LogToJobAsync(job.Id, "Error", $"Processing failed: {ex.Message}");
-                _logger.LogError(ex, "Processing failed: {Movie}", job.MovieName);
-            }
-            finally
-            {
-                ActiveProcessing = null;
-                StateChanged?.Invoke();
-                JobUpdated?.Invoke(job);
-            }
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _processingRunning, 0);
         }
     }
 
@@ -398,6 +406,66 @@ public class RipOrchestrator : IHostedService, IDisposable
             Message = message
         });
         await db.SaveChangesAsync();
+    }
+
+    private async Task TransferResultAsync(RipJob job)
+    {
+        if (job.TransferMode == TransferMode.None)
+        {
+            if (job.DeleteMkvAfterTranscode && File.Exists(job.MkvPath))
+                TryDeleteLocal(job.MkvPath);
+            return;
+        }
+
+        await UpdateJobStatusAsync(job, RipStatus.Transferring);
+        StateChanged?.Invoke();
+        JobUpdated?.Invoke(job);
+
+        using var scope = _scopeFactory.CreateScope();
+        var transfer = scope.ServiceProvider.GetRequiredService<TransferService>();
+
+        await transfer.TransferAsync(
+            job,
+            _settings.Current,
+            onLog: msg => _ = LogToJobAsync(job.Id, "Info", msg),
+            ct: CancellationToken.None);
+
+        foreach (var path in new[] { job.Mp4Path, job.MkvPath })
+            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                TryDeleteLocal(path);
+
+        CleanupEmptyDirectories(job);
+
+        await LogToJobAsync(job.Id, "Info", "Removed local intermediates from working directory.");
+
+        StateChanged?.Invoke();
+        JobUpdated?.Invoke(job);
+    }
+
+    private void TryDeleteLocal(string path)
+    {
+        try { File.Delete(path); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Failed to delete local file: {Path}", path); }
+    }
+
+    private void CleanupEmptyDirectories(RipJob job)
+    {
+        if (string.IsNullOrEmpty(job.OutputDir)) return;
+
+        var ripDir = Path.Combine(job.OutputDir, "rip");
+        TryDeleteIfEmpty(ripDir);
+        TryDeleteIfEmpty(job.OutputDir);
+    }
+
+    private void TryDeleteIfEmpty(string dir)
+    {
+        try
+        {
+            if (!Directory.Exists(dir)) return;
+            if (Directory.EnumerateFileSystemEntries(dir).Any()) return;
+            Directory.Delete(dir);
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "Failed to clean up empty directory: {Path}", dir); }
     }
 
     private async Task BroadcastAsync(RipJob job)

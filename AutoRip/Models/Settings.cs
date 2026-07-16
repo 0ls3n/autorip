@@ -31,5 +31,7 @@ public class Settings
     public string? SftpKeyFile { get; set; }
     public string SftpRemotePath { get; set; } = "/media/";
 
+    public string LocalCopyPath { get; set; } = "~/Videos/Converted";
+
     public TransferMode PostTransferMode { get; set; } = TransferMode.None;
 }
