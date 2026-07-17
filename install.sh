@@ -237,17 +237,20 @@ fi
 PROJECT_DIR="$(dirname "$CSPROJ_FILE")"
 log "Found project at $PROJECT_DIR"
 
+sudo mkdir -p "$INSTALL_DIR"
+sudo chown "$USER:$USER" "$INSTALL_DIR"
+
 dotnet publish "$CSPROJ_FILE" \
     --configuration Release \
     --output "$INSTALL_DIR" \
     -p:PublishSingleFile=false \
     2>&1 | tee -a "$LOG_FILE"
 
-ok "AutoRip published to $INSTALL_DIR"
-
-# Ensure data directory is writable
+sudo chown -R root:root "$INSTALL_DIR"
 sudo mkdir -p "$INSTALL_DIR/Data"
-sudo chown -R "$USER:$USER" "$INSTALL_DIR"
+sudo chown "$USER:$USER" "$INSTALL_DIR/Data"
+
+ok "AutoRip published to $INSTALL_DIR"
 echo ""
 
 # ── Step 7: Install systemd service ──────────────────────────────────────────
