@@ -112,17 +112,68 @@ SYSTEM_PACKAGES=(
     handbrake-cli
     mkvtoolnix
     tesseract-ocr
+    tesseract-ocr-eng
     ffmpeg
     genisoimage
     build-essential
+    pkg-config
+    python3
+    python3-pip
+    python3-venv
     libssl-dev
     zlib1g-dev
     libc6-dev
+    libavcodec-dev
+    libavformat-dev
+    libavutil-dev
+    libswscale-dev
+    libswresample-dev
 )
 
 log "Installing system packages: ${SYSTEM_PACKAGES[*]}..."
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${SYSTEM_PACKAGES[@]}" 2>&1 | tee -a "$LOG_FILE"
 ok "System packages installed."
+echo ""
+
+# ── Step 3b: Install subtitle OCR tools ───────────────────────────────────────
+
+log "Installing subtitle OCR tools (vobsub2srt, pgsrip)..."
+
+# vobsub2srt: VobSub (DVD) → SRT
+VOBSUB2SRT_BIN="/usr/local/bin/vobsub2srt"
+if command -v vobsub2srt &>/dev/null; then
+    ok "vobsub2srt already installed: $(command -v vobsub2srt)"
+else
+    log "Building vobsub2srt from source..."
+    VOBSUB2SRT_SRC="/tmp/vobsub2srt-build"
+    rm -rf "$VOBSUB2SRT_SRC"
+    git clone --depth 1 https://github.com/iltf20/VobSub2SRT.git "$VOBSUB2SRT_SRC" 2>&1 | tee -a "$LOG_FILE"
+    (
+        cd "$VOBSUB2SRT_SRC"
+        ./configure 2>&1 | tee -a "$LOG_FILE"
+        make 2>&1 | tee -a "$LOG_FILE"
+        sudo make install 2>&1 | tee -a "$LOG_FILE"
+    ) || warn "vobsub2srt build failed — VobSub OCR will be unavailable."
+    rm -rf "$VOBSUB2SRT_SRC"
+
+    if command -v vobsub2srt &>/dev/null; then
+        ok "vobsub2srt installed: $(command -v vobsub2srt)"
+    else
+        warn "vobsub2srt not in PATH. VobSub subtitle OCR will be skipped."
+    fi
+fi
+
+# pgsrip: PGS (Blu-ray) → SRT — Python package
+if command -v pgsrip &>/dev/null; then
+    ok "pgsrip already installed: $(command -v pgsrip)"
+else
+    log "Installing pgsrip (Python PGS OCR tool)..."
+    if sudo pip3 install --break-system-packages pgsrip 2>&1 | tee -a "$LOG_FILE"; then
+        ok "pgsrip installed: $(command -v pgsrip)"
+    else
+        warn "pgsrip install failed — PGS subtitle OCR will be skipped."
+    fi
+fi
 echo ""
 
 # ── Step 4: Install MakeMKV CLI ──────────────────────────────────────────────
@@ -257,21 +308,14 @@ echo ""
 # ── Step 7: Install systemd service ──────────────────────────────────────────
 
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
+WAS_RUNNING=false
 
-CREATE_SERVICE=true
-if systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
-    CREATE_SERVICE=false
-    warn "Service '$SERVICE_NAME' already exists. Skipping service creation."
-    warn "Run 'sudo systemctl enable --now $SERVICE_NAME' to start it."
+if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    WAS_RUNNING=true
 fi
 
-if [[ ! -d /run/systemd/system ]]; then
-    CREATE_SERVICE=false
-    warn "systemd not running. Skipping service creation."
-fi
-
-if [[ "$CREATE_SERVICE" == "true" ]]; then
-    log "Creating systemd service..."
+if [[ -d /run/systemd/system ]]; then
+    log "Writing systemd service..."
 
     DOTNET_BIN="$(which dotnet)"
     DOTNET_ROOT_DIR="${DOTNET_ROOT:-/usr/share/dotnet}"
@@ -290,6 +334,7 @@ RestartSec=5
 Environment=DOTNET_ROOT=$DOTNET_ROOT_DIR
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=ASPNETCORE_URLS=http://0.0.0.0:5139
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Security hardening
 NoNewPrivileges=true
@@ -300,31 +345,30 @@ WantedBy=multi-user.target
 SYSTEMDEOF
 
     sudo systemctl daemon-reload
-    ok "Service file created at $SERVICE_FILE"
+    ok "Service file written to $SERVICE_FILE"
 
-    echo ""
-    LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-    [[ -z "$LOCAL_IP" ]] && LOCAL_IP="<your-device-ip>"
-
-    echo -e "${YELLOW}┌──────────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${YELLOW}│  To start AutoRip, run:                                      │${NC}"
-    echo -e "${YELLOW}│                                                              │${NC}"
-    echo -e "${YELLOW}│    sudo systemctl enable --now $SERVICE_NAME                   │${NC}"
-    echo -e "${YELLOW}│                                                              │${NC}"
-    echo -e "${YELLOW}│  Then open:  http://$LOCAL_IP:5139           │${NC}"
-    echo -e "${YELLOW}│                                                              │${NC}"
-    echo -e "${YELLOW}│  Logs:       sudo journalctl -fu $SERVICE_NAME                 │${NC}"
-    echo -e "${YELLOW}│  Status:     sudo systemctl status $SERVICE_NAME               │${NC}"
-    echo -e "${YELLOW}└──────────────────────────────────────────────────────────────┘${NC}"
+    if [[ "$WAS_RUNNING" == "true" ]]; then
+        log "Restarting autorip service..."
+        sudo systemctl restart "$SERVICE_NAME" 2>&1 | tee -a "$LOG_FILE"
+        ok "Service restarted."
+    else
+        log "Enabling and starting autorip service..."
+        sudo systemctl enable --now "$SERVICE_NAME" 2>&1 | tee -a "$LOG_FILE"
+        ok "Service started."
+    fi
 else
-    echo ""
-    LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-    [[ -z "$LOCAL_IP" ]] && LOCAL_IP="<your-device-ip>"
-
-    echo -e "${YELLOW}To start AutoRip manually, run:${NC}"
-    echo -e "${YELLOW}  cd '$INSTALL_DIR' && dotnet AutoRip.dll${NC}"
-    echo -e "${YELLOW}  Then open: http://$LOCAL_IP:5139${NC}"
+    warn "systemd not running. Skipping service creation."
 fi
+
+echo ""
+LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+[[ -z "$LOCAL_IP" ]] && LOCAL_IP="<your-device-ip>"
+
+echo -e "${YELLOW}────────────────────────────────────────────────────────────────${NC}"
+echo -e "${YELLOW}  Open:  http://${LOCAL_IP}:5139${NC}"
+echo -e "${YELLOW}  Logs:  sudo journalctl -fu $SERVICE_NAME${NC}"
+echo -e "${YELLOW}  Stop:  sudo systemctl stop $SERVICE_NAME${NC}"
+echo -e "${YELLOW}────────────────────────────────────────────────────────────────${NC}"
 
 echo ""
 ok "Installation complete."

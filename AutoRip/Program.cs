@@ -23,6 +23,7 @@ builder.Services.AddSingleton<RipHistoryService>();
 builder.Services.AddSingleton<ProcessRunner>();
 builder.Services.AddSingleton<MakeMkvService>();
 builder.Services.AddSingleton<HandbrakeService>();
+builder.Services.AddSingleton<SubtitleService>();
 builder.Services.AddSingleton<DriveService>();
 builder.Services.AddSingleton<TransferService>();
 builder.Services.AddSingleton<RipOrchestrator>();

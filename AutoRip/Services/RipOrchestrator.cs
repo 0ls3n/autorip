@@ -353,6 +353,52 @@ public class RipOrchestrator : IHostedService, IDisposable
                     job.Mp4Path = mp4Path;
                     job.ProcessingProgress = 100;
 
+                    await UpdateJobStatusAsync(job, RipStatus.ExtractingSubtitles);
+                    StateChanged?.Invoke();
+                    JobUpdated?.Invoke(job);
+                    await LogToJobAsync(job.Id, "Info", "Extracting subtitles…");
+
+                    try
+                    {
+                        using var subScope = _scopeFactory.CreateScope();
+                        var subtitleService = subScope.ServiceProvider.GetRequiredService<SubtitleService>();
+
+                        var subtitles = await subtitleService.ExtractSubtitlesAsync(
+                            job.MkvPath!,
+                            job.OutputDir,
+                            job.MovieName,
+                            _settings.Current,
+                            onProgress: (percent, message) =>
+                            {
+                                job.ProcessingProgress = percent;
+                                JobUpdated?.Invoke(job);
+                            },
+                            ct: CancellationToken.None);
+
+                        job.Subtitles = subtitles;
+
+                        await LogToJobAsync(job.Id, "Info",
+                            subtitles.Count > 0
+                                ? $"Extracted {subtitles.Count} subtitle(s): {string.Join(", ", subtitles.Select(s => $"{s.Language}{(s.IsSdh ? " (SDH)" : "")}"))}"
+                                : "No subtitles extracted");
+
+                        foreach (var sub in subtitles)
+                            if (!string.IsNullOrEmpty(sub.SrtPath))
+                                await LogToJobAsync(job.Id, "Info", $"  → {Path.GetFileName(sub.SrtPath)}");
+
+                        using var dbScope = _scopeFactory.CreateScope();
+                        var db = dbScope.ServiceProvider.GetRequiredService<Data.AppDbContext>();
+                        db.RipJobs.Update(job);
+                        await db.SaveChangesAsync();
+                    }
+                    catch (Exception subEx)
+                    {
+                        _logger.LogWarning(subEx, "Subtitle extraction failed for {Movie}", job.MovieName);
+                        await LogToJobAsync(job.Id, "Warn", $"Subtitle extraction failed: {subEx.Message}");
+                    }
+
+                    job.ProcessingProgress = 100;
+
                     await TransferResultAsync(job);
 
                     await UpdateJobStatusAsync(job, RipStatus.Completed);
@@ -440,7 +486,9 @@ public class RipOrchestrator : IHostedService, IDisposable
 
         job.TransferProgress = 100;
 
-        foreach (var path in new[] { job.Mp4Path, job.MkvPath })
+        var filesToDelete = new List<string?> { job.Mp4Path, job.MkvPath };
+        filesToDelete.AddRange(job.Subtitles.Select(s => s.SrtPath));
+        foreach (var path in filesToDelete)
             if (!string.IsNullOrEmpty(path) && File.Exists(path))
                 TryDeleteLocal(path);
 

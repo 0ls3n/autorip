@@ -254,7 +254,12 @@
     @if (processingJob != null)
     {
         var isTransferring = processingJob.Status == RipStatus.Transferring;
-        var sectionTitle = isTransferring ? "Transferring" : "Transcoding";
+        var isExtractingSubs = processingJob.Status == RipStatus.ExtractingSubtitles;
+        var sectionTitle = isTransferring
+            ? "Transferring"
+            : isExtractingSubs
+                ? "Extracting Subtitles"
+                : "Transcoding";
         var progress = isTransferring ? processingJob.TransferProgress : processingJob.ProcessingProgress;
         var target = isTransferring ? processingJob.TransferTarget : string.Empty;
 

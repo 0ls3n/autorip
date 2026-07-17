@@ -231,6 +231,36 @@
                         <p class="hint">Maximum number of concurrent rips. 0 = no limit (naturally capped by the number of drives).</p>
                     </div>
                 </div>
+
+                <div class="card">
+                    <h2>Subtitles</h2>
+                    <p class="card-desc">Subtitle tracks are extracted from the MKV and converted to <code>.srt</code> files alongside the <code>.mp4</code>.</p>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="extractAllSubtitles" />
+                            <span>Extract all subtitle tracks</span>
+                        </label>
+                        <p class="hint">When on, every subtitle track is converted to <code>.srt</code>. When off, only the preferred languages below are extracted.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="prefSubs">Preferred languages</label>
+                        <input id="prefSubs" type="text" class="text-input" @bind="prefSubs" placeholder="eng,spa,fre" />
+                        <p class="hint">Comma-separated ISO 639-2 codes. Used only when <em>Extract all</em> is off.</p>
+                    </div>
+
+                    <hr class="card-divider" />
+                    <h3 class="card-subheading">Image Subtitles (OCR)</h3>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="ocrVobSub" />
+                            <span>OCR image subtitles (VobSub / PGS) to SRT</span>
+                        </label>
+                        <p class="hint">DVD VobSub and Blu-ray PGS subtitle tracks are bitmaps — they need OCR to become <code>.srt</code>. Requires <code>vobsub2srt</code> / <code>pgsrip</code> (installed by the Ubuntu installer). Tracks are skipped if the relevant tool isn't available.</p>
+                    </div>
+                </div>
             }
 
             @if (activeSection == "output")
@@ -544,6 +574,10 @@
     private int maxParallelRips = 0;
     private bool saved;
 
+    private bool extractAllSubtitles = true;
+    private string prefSubs = "eng";
+    private bool ocrVobSub = true;
+
     private bool useCustom = true;
     private List<string> presets = new();
     private string selectedPreset = "Very Fast 1080p30";
@@ -603,6 +637,9 @@
             autoEject = settings.AutoEjectAfterRip;
 autoStartRip = settings.AutoStartRip;
         maxParallelRips = settings.MaxParallelRips;
+        extractAllSubtitles = settings.ExtractAllSubtitles;
+        prefSubs = string.Join(", ", settings.PreferredSubtitleLanguages);
+        ocrVobSub = settings.OcrVobSub;
         useCustom = settings.UseCustomHandbrake;
             selectedPreset = settings.HandbrakePreset;
             selectedEncoder = settings.HandbrakeEncoder ?? "x264";
@@ -641,6 +678,11 @@ autoStartRip = settings.AutoStartRip;
         SettingsService.Current.AutoEjectAfterRip = autoEject;
         SettingsService.Current.AutoStartRip = autoStartRip;
         SettingsService.Current.MaxParallelRips = maxParallelRips;
+        SettingsService.Current.ExtractAllSubtitles = extractAllSubtitles;
+        SettingsService.Current.PreferredSubtitleLanguages = prefSubs
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        SettingsService.Current.OcrVobSub = ocrVobSub;
         SettingsService.Current.UseCustomHandbrake = useCustom;
         SettingsService.Current.HandbrakePreset = selectedPreset;
         SettingsService.Current.HandbrakeEncoder = selectedEncoder;
