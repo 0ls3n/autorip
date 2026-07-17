@@ -237,6 +237,7 @@ fi
 PROJECT_DIR="$(dirname "$CSPROJ_FILE")"
 log "Found project at $PROJECT_DIR"
 
+sudo rm -rf "$INSTALL_DIR"
 sudo mkdir -p "$INSTALL_DIR"
 sudo chown "$USER:$USER" "$INSTALL_DIR"
 
