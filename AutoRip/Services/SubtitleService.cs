@@ -119,72 +119,183 @@ public class SubtitleService
         return results;
     }
 
+    private static readonly HashSet<string> MkvmergeTextCodecs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "subrip", "SubRip", "SubRip/SRT", "SRT",
+        "SubStationAlpha", "ASS", "SSA",
+        "S_TEXT/UTF8", "S_TEXT/ASCII",
+        "mov_text", "UTF-8", "UTF8"
+    };
+
     private async Task<List<SubtitleTrackInfo>> GetSubtitleTracksAsync(string mkvPath, CancellationToken ct)
     {
+        // Primary: use mkvmerge (most reliable for MKV language/codec detection)
+        var tracks = await GetTracksFromMkvmergeAsync(mkvPath, ct);
+        if (tracks.Count > 0)
+            return tracks;
+
+        // Fallback: ffprobe (works on non-MKV containers too)
+        _logger.LogInformation("mkvmerge returned no tracks, falling back to ffprobe…");
+        return await GetTracksFromFfprobeAsync(mkvPath, ct);
+    }
+
+    private async Task<List<SubtitleTrackInfo>> GetTracksFromMkvmergeAsync(string mkvPath, CancellationToken ct)
+    {
         var result = await _runner.RunAsync(
-            "ffprobe",
-            $"-v quiet -print_format json -show_streams -select_streams s \"{mkvPath}\"",
+            "mkvmerge",
+            $"--identify -J \"{mkvPath}\"",
             ct: ct,
             timeout: TimeSpan.FromSeconds(45));
 
-        if (result.ExitCode != 0)
+        if (result.ExitCode != 0 || string.IsNullOrWhiteSpace(result.StdOut))
         {
-            _logger.LogWarning("ffprobe failed (exit {Code}): {Err}", result.ExitCode, result.StdErr);
+            _logger.LogWarning("mkvmerge failed (exit {Code}): {Err}", result.ExitCode, result.StdErr);
             return new List<SubtitleTrackInfo>();
         }
-
-        if (string.IsNullOrWhiteSpace(result.StdOut))
-            return new List<SubtitleTrackInfo>();
 
         var tracks = new List<SubtitleTrackInfo>();
         try
         {
             using var doc = JsonDocument.Parse(result.StdOut);
-            if (doc.RootElement.TryGetProperty("streams", out var streams) && streams.ValueKind == JsonValueKind.Array)
+            if (!doc.RootElement.TryGetProperty("tracks", out var tracksArray)
+                || tracksArray.ValueKind != JsonValueKind.Array)
+                return tracks;
+
+            foreach (var t in tracksArray.EnumerateArray())
             {
-                foreach (var s in streams.EnumerateArray())
+                var type = t.TryGetProperty("type", out var tp) ? tp.GetString() ?? "" : "";
+                if (!string.Equals(type, "subtitles", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var id = t.TryGetProperty("id", out var tid) ? tid.GetInt32() : -1;
+                var codec = t.TryGetProperty("codec", out var cd) ? cd.GetString() ?? "" : "";
+
+                var language = string.Empty;
+                var title = string.Empty;
+                if (t.TryGetProperty("properties", out var props) && props.ValueKind == JsonValueKind.Object)
                 {
-                    var index = s.TryGetProperty("index", out var idx) ? idx.GetInt32() : -1;
-                    var codec = s.TryGetProperty("codec_name", out var c) ? c.GetString() ?? "" : "";
-                    var language = string.Empty;
-                    var title = string.Empty;
-
-                    if (s.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Object)
-                    {
-                        if (tags.TryGetProperty("language", out var l))
-                            language = l.GetString() ?? "";
-                        if (tags.TryGetProperty("title", out var t))
-                            title = t.GetString() ?? "";
-                    }
-
-                    bool isVobsub = VobsubCodecs.Contains(codec) || codec.Contains("dvd", StringComparison.OrdinalIgnoreCase);
-                    bool isPgs = PgsCodecs.Contains(codec) || codec.Contains("pgs", StringComparison.OrdinalIgnoreCase);
-                    bool isText = TextCodecs.Contains(codec);
-                    bool isImage = isVobsub || isPgs || (!isText && codec.Contains("subtitle", StringComparison.OrdinalIgnoreCase));
-
-                    bool isSdh = title.Contains("SDH", StringComparison.OrdinalIgnoreCase)
-                                 || title.Contains("Hearing", StringComparison.OrdinalIgnoreCase)
-                                 || title.Contains("CC", StringComparison.OrdinalIgnoreCase);
-
-                    tracks.Add(new SubtitleTrackInfo
-                    {
-                        Index = index,
-                        Codec = codec,
-                        Language = language,
-                        Title = title,
-                        IsVobsub = isVobsub,
-                        IsPgs = isPgs,
-                        IsText = isText,
-                        IsImage = isImage,
-                        IsSdh = isSdh
-                    });
+                    if (props.TryGetProperty("language", out var lang))
+                        language = lang.GetString() ?? "";
+                    if (props.TryGetProperty("track_name", out var tname))
+                        title = tname.GetString() ?? "";
                 }
+
+                bool isVobsub = codec.Contains("VobSub", StringComparison.OrdinalIgnoreCase);
+                bool isPgs = codec.Contains("PGS", StringComparison.OrdinalIgnoreCase)
+                             || codec.Contains("HDMV", StringComparison.OrdinalIgnoreCase);
+                bool isText = MkvmergeTextCodecs.Contains(codec)
+                              || codec.StartsWith("S_TEXT/", StringComparison.OrdinalIgnoreCase);
+                bool isImage = isVobsub || isPgs;
+
+                bool isSdh = title.Contains("SDH", StringComparison.OrdinalIgnoreCase)
+                             || title.Contains("Hearing", StringComparison.OrdinalIgnoreCase)
+                             || title.Contains("CC", StringComparison.OrdinalIgnoreCase);
+
+                tracks.Add(new SubtitleTrackInfo
+                {
+                    Index = id,
+                    Codec = codec,
+                    Language = language,
+                    Title = title,
+                    IsVobsub = isVobsub,
+                    IsPgs = isPgs,
+                    IsText = isText,
+                    IsImage = isImage,
+                    IsSdh = isSdh
+                });
+
+                _logger.LogDebug("Subtitle track {Id}: codec={Codec} lang={Lang} text={Text} image={Image}",
+                    id, codec, language, isText, isImage);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to parse ffprobe subtitle output");
+            _logger.LogWarning(ex, "Failed to parse mkvmerge output");
         }
+
+        for (int i = 0; i < tracks.Count; i++)
+            tracks[i].SubtitleStreamIndex = i;
+
+        return tracks;
+    }
+
+    private async Task<List<SubtitleTrackInfo>> GetTracksFromFfprobeAsync(string mkvPath, CancellationToken ct)
+    {
+        var result = await _runner.RunAsync(
+            "ffprobe",
+            $"-v quiet -print_format json -show_streams \"{mkvPath}\"",
+            ct: ct,
+            timeout: TimeSpan.FromSeconds(45));
+
+        if (result.ExitCode != 0 || string.IsNullOrWhiteSpace(result.StdOut))
+        {
+            _logger.LogWarning("ffprobe failed (exit {Code}): {Err}", result.ExitCode, result.StdErr);
+            return new List<SubtitleTrackInfo>();
+        }
+
+        var tracks = new List<SubtitleTrackInfo>();
+        try
+        {
+            using var doc = JsonDocument.Parse(result.StdOut);
+            if (!doc.RootElement.TryGetProperty("streams", out var streams)
+                || streams.ValueKind != JsonValueKind.Array)
+                return tracks;
+
+            foreach (var s in streams.EnumerateArray())
+            {
+                var codecType = s.TryGetProperty("codec_type", out var cType) ? cType.GetString() ?? "" : "";
+                if (!string.Equals(codecType, "subtitle", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var index = s.TryGetProperty("index", out var idx) ? idx.GetInt32() : -1;
+                var codec = s.TryGetProperty("codec_name", out var c) ? c.GetString() ?? "" : "";
+                var language = string.Empty;
+                var title = string.Empty;
+
+                if (s.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Object)
+                {
+                    if (tags.TryGetProperty("language", out var l))
+                        language = l.GetString() ?? "";
+                    if (tags.TryGetProperty("title", out var t))
+                        title = t.GetString() ?? "";
+                }
+
+                bool isVobsub = VobsubCodecs.Contains(codec)
+                                || codec.Contains("dvd", StringComparison.OrdinalIgnoreCase);
+                bool isPgs = PgsCodecs.Contains(codec)
+                             || codec.Contains("pgs", StringComparison.OrdinalIgnoreCase);
+                bool isText = TextCodecs.Contains(codec);
+                bool isImage = isVobsub || isPgs
+                               || (!isText && codec.Contains("subtitle", StringComparison.OrdinalIgnoreCase));
+
+                bool isSdh = title.Contains("SDH", StringComparison.OrdinalIgnoreCase)
+                             || title.Contains("Hearing", StringComparison.OrdinalIgnoreCase)
+                             || title.Contains("CC", StringComparison.OrdinalIgnoreCase);
+
+                tracks.Add(new SubtitleTrackInfo
+                {
+                    Index = index,
+                    Codec = codec,
+                    Language = language,
+                    Title = title,
+                    IsVobsub = isVobsub,
+                    IsPgs = isPgs,
+                    IsText = isText,
+                    IsImage = isImage,
+                    IsSdh = isSdh
+                });
+
+                _logger.LogDebug("ffprobe subtitle stream {Id}: codec={Codec} lang={Lang} text={Text} image={Image}",
+                    index, codec, language, isText, isImage);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse ffprobe output");
+        }
+
+        for (int i = 0; i < tracks.Count; i++)
+            tracks[i].SubtitleStreamIndex = i;
 
         return tracks;
     }
@@ -240,7 +351,7 @@ public class SubtitleService
     private async Task<bool> ExtractTextSubtitleAsync(
         string mkvPath, SubtitleTrackInfo track, string srtPath, CancellationToken ct)
     {
-        var args = $"-y -nostdin -i \"{mkvPath}\" -map 0:{track.Index} -c:s srt \"{srtPath}\"";
+        var args = $"-y -nostdin -i \"{mkvPath}\" -map 0:s:{track.SubtitleStreamIndex} -c:s srt \"{srtPath}\"";
         var result = await _runner.RunAsync("ffmpeg", args, ct: ct, timeout: TimeSpan.FromMinutes(3));
 
         if (result.ExitCode != 0)
@@ -424,4 +535,5 @@ internal sealed class SubtitleTrackInfo
     public bool IsPgs { get; set; }
     public bool IsImage { get; set; }
     public bool IsSdh { get; set; }
+    public int SubtitleStreamIndex { get; set; }
 }
