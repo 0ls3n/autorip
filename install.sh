@@ -264,7 +264,7 @@ if systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
     warn "Run 'sudo systemctl enable --now $SERVICE_NAME' to start it."
 fi
 
-if ! systemd --version &>/dev/null; then
+if [[ ! -d /run/systemd/system ]]; then
     CREATE_SERVICE=false
     warn "systemd not running. Skipping service creation."
 fi
