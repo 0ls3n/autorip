@@ -140,26 +140,43 @@ echo ""
 log "Installing subtitle OCR tools (vobsub2srt, pgsrip)..."
 
 # vobsub2srt: VobSub (DVD) → SRT
-VOBSUB2SRT_BIN="/usr/local/bin/vobsub2srt"
 if command -v vobsub2srt &>/dev/null; then
     ok "vobsub2srt already installed: $(command -v vobsub2srt)"
 else
-    log "Building vobsub2srt from source..."
-    VOBSUB2SRT_SRC="/tmp/vobsub2srt-build"
-    rm -rf "$VOBSUB2SRT_SRC"
-    git clone --depth 1 https://github.com/iltf20/VobSub2SRT.git "$VOBSUB2SRT_SRC" 2>&1 | tee -a "$LOG_FILE"
-    (
-        cd "$VOBSUB2SRT_SRC"
-        ./configure 2>&1 | tee -a "$LOG_FILE"
-        make 2>&1 | tee -a "$LOG_FILE"
-        sudo make install 2>&1 | tee -a "$LOG_FILE"
-    ) || warn "vobsub2srt build failed — VobSub OCR will be unavailable."
-    rm -rf "$VOBSUB2SRT_SRC"
+    log "Installing vobsub2srt (VobSub OCR tool)..."
+
+    VOBSUB2SRT_INSTALLED=false
+
+    # Try apt first
+    if sudo apt-get install -y vobsub2srt >> "$LOG_FILE" 2>&1; then
+        VOBSUB2SRT_INSTALLED=true
+        ok "vobsub2srt installed via apt"
+    fi
+
+    # Fall back to building from source
+    if [[ "$VOBSUB2SRT_INSTALLED" != "true" ]]; then
+        log "apt package not found, building from source..."
+        VOBSUB2SRT_SRC="/tmp/vobsub2srt-build"
+        rm -rf "$VOBSUB2SRT_SRC"
+
+        if GIT_TERMINAL_PROMPT=0 git clone --depth 1 \
+            https://github.com/ruediger/VobSub2SRT.git \
+            "$VOBSUB2SRT_SRC" >> "$LOG_FILE" 2>&1; then
+            (
+                cd "$VOBSUB2SRT_SRC"
+                ./configure >> "$LOG_FILE" 2>&1 \
+                    && make >> "$LOG_FILE" 2>&1 \
+                    && sudo make install >> "$LOG_FILE" 2>&1
+            ) || true
+            rm -rf "$VOBSUB2SRT_SRC"
+            VOBSUB2SRT_INSTALLED=true
+        fi
+    fi
 
     if command -v vobsub2srt &>/dev/null; then
-        ok "vobsub2srt installed: $(command -v vobsub2srt)"
+        ok "vobsub2srt ready: $(command -v vobsub2srt)"
     else
-        warn "vobsub2srt not in PATH. VobSub subtitle OCR will be skipped."
+        warn "vobsub2srt not available — VobSub subtitle OCR will be skipped."
     fi
 fi
 
