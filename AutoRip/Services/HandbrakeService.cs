@@ -195,14 +195,15 @@ public class HandbrakeService
         else
             flags.Add("--no-markers");
 
-        if (!string.IsNullOrWhiteSpace(settings.HandbrakeFramerate) &&
-            settings.HandbrakeFramerate != "source")
+        if (!string.IsNullOrWhiteSpace(settings.HandbrakeFramerate))
             flags.Add($"-r {settings.HandbrakeFramerate}");
 
         if (settings.HandbrakeCfr)
             flags.Add("--cfr");
         else
             flags.Add("--vfr");
+
+        flags.Add(settings.HandbrakeAutoCrop ? "--crop" : "--crop 0:0:0:0");
 
         var extra = string.Join(" ", flags);
         return $"-i \"{input}\" -o \"{output}\" {coreArgs} {audio} {extra}";

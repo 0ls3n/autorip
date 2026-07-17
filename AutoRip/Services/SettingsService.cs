@@ -41,6 +41,7 @@ public class SettingsService
                 case "HandbrakeMarkers": Current.HandbrakeMarkers = entry.Value != "false"; break;
                 case "HandbrakeFramerate": Current.HandbrakeFramerate = entry.Value ?? "source"; break;
                 case "HandbrakeCfr": Current.HandbrakeCfr = entry.Value == "true"; break;
+                case "HandbrakeAutoCrop": Current.HandbrakeAutoCrop = entry.Value == "true"; break;
                 case "AutoDeleteMkv": Current.AutoDeleteMkv = entry.Value == "true"; break;
                 case "AutoEjectAfterRip": Current.AutoEjectAfterRip = entry.Value != "false"; break;
                 case "AutoStartRip": Current.AutoStartRip = entry.Value == "true"; break;
@@ -93,6 +94,7 @@ public class SettingsService
             ["HandbrakeMarkers"] = Current.HandbrakeMarkers.ToString().ToLower(),
             ["HandbrakeFramerate"] = Current.HandbrakeFramerate,
             ["HandbrakeCfr"] = Current.HandbrakeCfr.ToString().ToLower(),
+            ["HandbrakeAutoCrop"] = Current.HandbrakeAutoCrop.ToString().ToLower(),
             ["AutoDeleteMkv"] = Current.AutoDeleteMkv.ToString().ToLower(),
             ["AutoEjectAfterRip"] = Current.AutoEjectAfterRip.ToString().ToLower(),
             ["AutoStartRip"] = Current.AutoStartRip.ToString().ToLower(),

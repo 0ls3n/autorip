@@ -11,310 +11,371 @@
 <div class="settings-page">
     <h1 class="page-heading">Settings</h1>
 
-    <div class="settings-content">
-        <div class="card">
-            <h2>TMDB Integration</h2>
-            <p class="card-desc">Automatically identify movies using The Movie Database.</p>
+    <nav class="settings-tabs" aria-label="Settings sections">
+        <button class="settings-tab @(activeSection == "tmdb" ? "active" : "")" @onclick="SetTmdb">TMDB</button>
+        <button class="settings-tab @(activeSection == "handbrake" ? "active" : "")" @onclick="SetHandbrake">HandBrake</button>
+        <button class="settings-tab @(activeSection == "automation" ? "active" : "")" @onclick="SetAutomation">Automation</button>
+        <button class="settings-tab @(activeSection == "output" ? "active" : "")" @onclick="SetOutput">Output</button>
+    </nav>
 
-            <div class="form-group">
-                <label for="tmdbApiKey">API Key</label>
-                <input id="tmdbApiKey" type="password" class="text-input" @bind="apiKey" placeholder="Paste your TMDB API key…" />
-                <p class="hint">Get a free key at <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a></p>
-            </div>
+    <div class="settings-shell">
+        <aside class="settings-sidebar">
+            <button class="settings-nav @(activeSection == "tmdb" ? "active" : "")" @onclick="SetTmdb">
+                <span class="settings-nav-ico">🎬</span>
+                <span class="settings-nav-text">
+                    <span class="settings-nav-title">TMDB</span>
+                    <span class="settings-nav-sub">Movie identification</span>
+                </span>
+            </button>
+            <button class="settings-nav @(activeSection == "handbrake" ? "active" : "")" @onclick="SetHandbrake">
+                <span class="settings-nav-ico">🎞️</span>
+                <span class="settings-nav-text">
+                    <span class="settings-nav-title">HandBrake</span>
+                    <span class="settings-nav-sub">Transcoding</span>
+                </span>
+            </button>
+            <button class="settings-nav @(activeSection == "automation" ? "active" : "")" @onclick="SetAutomation">
+                <span class="settings-nav-ico">⚡</span>
+                <span class="settings-nav-text">
+                    <span class="settings-nav-title">Automation</span>
+                    <span class="settings-nav-sub">Rip behavior</span>
+                </span>
+            </button>
+            <button class="settings-nav @(activeSection == "output" ? "active" : "")" @onclick="SetOutput">
+                <span class="settings-nav-ico">📤</span>
+                <span class="settings-nav-text">
+                    <span class="settings-nav-title">Output</span>
+                    <span class="settings-nav-sub">Delivery &amp; paths</span>
+                </span>
+            </button>
+        </aside>
 
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" @bind="autoDetect" />
-                    <span>Auto-identify discs when inserted</span>
-                </label>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>HandBrake Transcoding</h2>
-
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" @bind="useCustom" />
-                    <span>Use custom encoder settings</span>
-                </label>
-            </div>
-
-            @if (!useCustom)
+        <div class="settings-main">
+            @if (activeSection == "tmdb")
             {
-                <div class="form-group">
-                    <label for="hbPreset">Preset</label>
-                    <div class="select-wrapper">
-                        <select id="hbPreset" class="text-input" @bind="selectedPreset">
-                            @if (presets.Count == 0)
-                            {
-                                <option value="">Loading…</option>
-                            }
-                            else
-                            {
-                                @foreach (var p in presets)
-                                {
-                                    <option value="@p">@p</option>
-                                }
-                            }
-                        </select>
+                <div class="card">
+                    <h2>TMDB Integration</h2>
+                    <p class="card-desc">Automatically identify movies using The Movie Database.</p>
+
+                    <div class="form-group">
+                        <label for="tmdbApiKey">API Key</label>
+                        <input id="tmdbApiKey" type="password" class="text-input" @bind="apiKey" placeholder="Paste your TMDB API key…" />
+                        <p class="hint">Get a free key at <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a></p>
                     </div>
-                </div>
-            }
-            else
-            {
-                <div class="form-group">
-                    <label for="hbEncoder">Encoder</label>
-                    <div class="select-wrapper">
-                        <select id="hbEncoder" class="text-input" @bind="selectedEncoder">
-                            @foreach (var e in encoderOptions)
-                            {
-                                <option value="@e">@e</option>
-                            }
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="hbQuality">Quality (RF): @quality.ToString("F1")</label>
-                    <input id="hbQuality" type="range" class="range-input" min="16" max="30" step="0.5" @bind="quality" @bind:event="oninput" />
-                    <p class="hint">Lower = better quality, larger file. 16–30 for H.264.</p>
-                </div>
-                <div class="form-group">
-                    <label for="hbSpeed">Encoder Speed</label>
-                    <div class="select-wrapper">
-                        <select id="hbSpeed" class="text-input" @bind="selectedSpeed">
-                            <option value="ultrafast">Ultrafast (worst compression)</option>
-                            <option value="superfast">Superfast</option>
-                            <option value="veryfast">Veryfast</option>
-                            <option value="faster">Faster</option>
-                            <option value="fast">Fast</option>
-                            <option value="medium">Medium (balanced)</option>
-                            <option value="slow">Slow</option>
-                            <option value="slower">Slower</option>
-                            <option value="veryslow">Veryslow (best compression)</option>
-                        </select>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="autoDetect" />
+                            <span>Auto-identify discs when inserted</span>
+                        </label>
                     </div>
                 </div>
             }
 
-            <hr class="card-divider" />
-            <h3 class="card-subheading">Advanced</h3>
+            @if (activeSection == "handbrake")
+            {
+                <div class="card">
+                    <h2>HandBrake Transcoding</h2>
 
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" @bind="webOptimized" />
-                    <span>Web optimized (fast start)</span>
-                </label>
-            </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="useCustom" />
+                            <span>Use custom encoder settings</span>
+                        </label>
+                    </div>
 
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" @bind="alignAv" />
-                    <span>Align A/V start</span>
-                </label>
-            </div>
-
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" @bind="chapterMarkers" />
-                    <span>Chapter markers</span>
-                </label>
-            </div>
-
-            <div class="form-group">
-                <label for="hbFramerate">Framerate</label>
-                <div class="select-wrapper">
-                    <select id="hbFramerate" class="text-input" @bind="framerate">
-                        <option value="source">Same as source</option>
-                        <option value="23.976">23.976</option>
-                        <option value="25">25</option>
-                        <option value="29.97">29.97</option>
-                        <option value="30">30</option>
-                        <option value="50">50</option>
-                        <option value="59.94">59.94</option>
-                        <option value="60">60</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>Framerate mode</label>
-                <div class="radio-group">
-                    <label class="radio-label">
-                        <input type="radio" name="framerateMode" value="cfr" checked="@cfr" @onchange="() => cfr = true" />
-                        <span>Constant</span>
-                    </label>
-                    <label class="radio-label">
-                        <input type="radio" name="framerateMode" value="vfr" checked="@(!cfr)" @onchange="() => cfr = false" />
-                        <span>Variable</span>
-                    </label>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Automation</h2>
-
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" @bind="autoEject" />
-                    <span>Eject disc after rip completes</span>
-                </label>
-            </div>
-
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" @bind="autoStartRip" />
-                    <span>Auto-start rip when disc is inserted</span>
-                </label>
-            </div>
-
-            <div class="form-group">
-                <label for="maxParallelRips">Max Parallel Rips</label>
-                <input id="maxParallelRips" type="number" min="0" step="1" class="text-input" @bind="maxParallelRips" />
-                <p class="hint">Maximum number of concurrent rips. 0 = no limit (naturally capped by the number of drives).</p>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Output</h2>
-            <p class="card-desc">Where rips and transcodes happen, and where the finished <code>.mp4</code> ends up.</p>
-
-            <div class="form-group">
-                <label for="outputDir">Working Directory</label>
-                <div class="input-row">
-                    <input id="outputDir" type="text" class="text-input" @bind="outputDir" />
-                    <button class="btn btn-icon" title="Browse local folders" @onclick="OpenLocalBrowserOutput">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                            <path d="M1.5 4.5C1.5 3.67 2.17 3 3 3h3l1.5 1.5H13c.83 0 1.5.67 1.5 1.5v6c0 .83-.67 1.5-1.5 1.5H3c-.83 0-1.5-.67-1.5-1.5v-7.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-                        </svg>
-                    </button>
-                </div>
-                <p class="hint">Local workspace for ripping and transcoding. Files left here are removed once delivered elsewhere (see below).</p>
-            </div>
-
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" @bind="autoDeleteMkv" />
-                    <span>Delete .mkv after successful transcode</span>
-                </label>
-            </div>
-
-            <hr class="card-divider" />
-            <h3 class="card-subheading">After Ripping</h3>
-
-            <div class="form-group">
-                <label for="postTransferMode">Action</label>
-                <div class="select-wrapper">
-                    <select id="postTransferMode" class="text-input" @bind="postTransferMode">
-                        <option value="None">Keep in working directory</option>
-                        <option value="Sftp">Upload to server via SFTP</option>
-                        <option value="LocalCopy">Save to a local folder</option>
-                        <option value="Both">SFTP upload + local folder</option>
-                    </select>
-                </div>
-                <p class="hint">
-                    @if (postTransferMode == "None")
+                    @if (!useCustom)
                     {
-                        <text>The finished .mp4 stays in the working directory.</text>
+                        <div class="form-group">
+                            <label for="hbPreset">Preset</label>
+                            <div class="select-wrapper">
+                                <select id="hbPreset" class="text-input" @bind="selectedPreset">
+                                    @if (presets.Count == 0)
+                                    {
+                                        <option value="">Loading…</option>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var p in presets)
+                                        {
+                                            <option value="@p">@p</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                        </div>
                     }
                     else
                     {
-                        <text>After delivery, the .mp4 and any leftover .mkv are removed from the working directory.</text>
+                        <div class="form-group">
+                            <label for="hbEncoder">Encoder</label>
+                            <div class="select-wrapper">
+                                <select id="hbEncoder" class="text-input" @bind="selectedEncoder">
+                                    @foreach (var e in encoderOptions)
+                                    {
+                                        <option value="@e">@e</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="hbQuality">Quality (RF): @quality.ToString("F1")</label>
+                            <input id="hbQuality" type="range" class="range-input" min="16" max="30" step="0.5" @bind="quality" @bind:event="oninput" />
+                            <p class="hint">Lower = better quality, larger file. 16–30 for H.264.</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="hbSpeed">Encoder Speed</label>
+                            <div class="select-wrapper">
+                                <select id="hbSpeed" class="text-input" @bind="selectedSpeed">
+                                    <option value="ultrafast">Ultrafast (worst compression)</option>
+                                    <option value="superfast">Superfast</option>
+                                    <option value="veryfast">Veryfast</option>
+                                    <option value="faster">Faster</option>
+                                    <option value="fast">Fast</option>
+                                    <option value="medium">Medium (balanced)</option>
+                                    <option value="slow">Slow</option>
+                                    <option value="slower">Slower</option>
+                                    <option value="veryslow">Veryslow (best compression)</option>
+                                </select>
+                            </div>
+                        </div>
                     }
-                </p>
-            </div>
 
-            @if (postTransferMode is "Sftp" or "Both")
-            {
-                <hr class="card-divider" />
-                <h3 class="card-subheading">SFTP Server</h3>
+                    <hr class="card-divider" />
+                    <h3 class="card-subheading">Advanced</h3>
+                    <p class="hint" style="margin-bottom:16px;">These flags are appended after the preset or custom encoder, so they apply in both modes.</p>
 
-                <div class="form-group">
-                    <label for="sftpHost">Host</label>
-                    <input id="sftpHost" type="text" class="text-input" @bind="sftpHost" placeholder="192.168.1.10" />
-                </div>
-
-                <div class="form-group">
-                    <label for="sftpPort">Port</label>
-                    <input id="sftpPort" type="number" min="1" max="65535" step="1" class="text-input" @bind="sftpPort" />
-                </div>
-
-                <div class="form-group">
-                    <label for="sftpUser">Username</label>
-                    <input id="sftpUser" type="text" class="text-input" @bind="sftpUser" placeholder="media" />
-                </div>
-
-                <div class="form-group">
-                    <label for="sftpPassword">Password</label>
-                    <input id="sftpPassword" type="password" class="text-input" @bind="sftpPassword" placeholder="••••••••" />
-                </div>
-
-                <div class="form-group">
-                    <label for="sftpRemotePath">Remote path</label>
-                    <div class="input-row">
-                        <input id="sftpRemotePath" type="text" class="text-input" @bind="sftpRemotePath" placeholder="/media/movies/" />
-                        <button class="btn btn-icon" title="Browse remote folders" @onclick="OpenSftpBrowser"
-                                disabled="@(string.IsNullOrWhiteSpace(sftpHost) || string.IsNullOrWhiteSpace(sftpUser))">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                <path d="M1.5 4.5C1.5 3.67 2.17 3 3 3h3l1.5 1.5H13c.83 0 1.5.67 1.5 1.5v6c0 .83-.67 1.5-1.5 1.5H3c-.83 0-1.5-.67-1.5-1.5v-7.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-                            </svg>
-                        </button>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="webOptimized" />
+                            <span>Web optimized (fast start)</span>
+                        </label>
                     </div>
-                    <p class="hint">Folder on the server where the .mp4 will be uploaded. Created if it doesn't exist.</p>
-                </div>
 
-                <div class="form-group">
-                    <label for="sftpKeyFile">SSH key file (optional)</label>
-                    <input id="sftpKeyFile" type="text" class="text-input" @bind="sftpKeyFile" placeholder="~/.ssh/id_ed25519" />
-                    <p class="hint">If set and the file exists, key-based authentication is used instead of the password.</p>
-                </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="alignAv" />
+                            <span>Align A/V start</span>
+                        </label>
+                    </div>
 
-                <div class="form-group">
-                    <button class="btn btn-secondary" @onclick="TestSftpConnection" disabled="@sftpTesting">
-                        @if (sftpTesting)
-                        {
-                            <div class="spinner spinner-sm"></div>
-                            <text>Testing…</text>
-                        }
-                        else
-                        {
-                            <text>Test Connection</text>
-                        }
-                    </button>
-                    @if (!string.IsNullOrEmpty(sftpTestMessage))
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="chapterMarkers" />
+                            <span>Chapter markers</span>
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="hbFramerate">Framerate</label>
+                        <div class="select-wrapper">
+                            <select id="hbFramerate" class="text-input" @bind="framerate">
+                                <option value="source">Same as source</option>
+                                <option value="23.976">23.976</option>
+                                <option value="25">25</option>
+                                <option value="29.97">29.97</option>
+                                <option value="30">30</option>
+                                <option value="50">50</option>
+                                <option value="59.94">59.94</option>
+                                <option value="60">60</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Framerate mode</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="framerateMode" value="cfr" checked="@cfr" @onchange="() => cfr = true" />
+                                <span>Constant</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="framerateMode" value="vfr" checked="@(!cfr)" @onchange="() => cfr = false" />
+                                <span>Variable</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="autoCrop" />
+                            <span>Auto-crop (remove black bars)</span>
+                        </label>
+                        <p class="hint">When off the full frame is kept at source resolution. Turn on to trim letterboxing from widescreen content.</p>
+                    </div>
+                </div>
+            }
+
+            @if (activeSection == "automation")
+            {
+                <div class="card">
+                    <h2>Automation</h2>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="autoEject" />
+                            <span>Eject disc after rip completes</span>
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="autoStartRip" />
+                            <span>Auto-start rip when disc is inserted</span>
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="maxParallelRips">Max Parallel Rips</label>
+                        <input id="maxParallelRips" type="number" min="0" step="1" class="text-input" @bind="maxParallelRips" />
+                        <p class="hint">Maximum number of concurrent rips. 0 = no limit (naturally capped by the number of drives).</p>
+                    </div>
+                </div>
+            }
+
+            @if (activeSection == "output")
+            {
+                <div class="card">
+                    <h2>Output</h2>
+                    <p class="card-desc">Where rips and transcodes happen, and where the finished <code>.mp4</code> ends up.</p>
+
+                    <div class="form-group">
+                        <label for="outputDir">Working Directory</label>
+                        <div class="input-row">
+                            <input id="outputDir" type="text" class="text-input" @bind="outputDir" />
+                            <button class="btn btn-icon" title="Browse local folders" @onclick="OpenLocalBrowserOutput">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M1.5 4.5C1.5 3.67 2.17 3 3 3h3l1.5 1.5H13c.83 0 1.5.67 1.5 1.5v6c0 .83-.67 1.5-1.5 1.5H3c-.83 0-1.5-.67-1.5-1.5v-7.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <p class="hint">Local workspace for ripping and transcoding. Files left here are removed once delivered elsewhere (see below).</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="autoDeleteMkv" />
+                            <span>Delete .mkv after successful transcode</span>
+                        </label>
+                    </div>
+
+                    <hr class="card-divider" />
+                    <h3 class="card-subheading">After Ripping</h3>
+
+                    <div class="form-group">
+                        <label for="postTransferMode">Action</label>
+                        <div class="select-wrapper">
+                            <select id="postTransferMode" class="text-input" @bind="postTransferMode">
+                                <option value="None">Keep in working directory</option>
+                                <option value="Sftp">Upload to server via SFTP</option>
+                                <option value="LocalCopy">Save to a local folder</option>
+                                <option value="Both">SFTP upload + local folder</option>
+                            </select>
+                        </div>
+                        <p class="hint">
+                            @if (postTransferMode == "None")
+                            {
+                                <text>The finished .mp4 stays in the working directory.</text>
+                            }
+                            else
+                            {
+                                <text>After delivery, the .mp4 and any leftover .mkv are removed from the working directory.</text>
+                            }
+                        </p>
+                    </div>
+
+                    @if (postTransferMode is "Sftp" or "Both")
                     {
-                        <span style="margin-left: 1rem;" class="badge @(sftpTestSuccess == true ? "badge-green" : "badge-red") saved-badge">@sftpTestMessage</span>
+                        <hr class="card-divider" />
+                        <h3 class="card-subheading">SFTP Server</h3>
+
+                        <div class="form-group">
+                            <label for="sftpHost">Host</label>
+                            <input id="sftpHost" type="text" class="text-input" @bind="sftpHost" placeholder="192.168.1.10" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sftpPort">Port</label>
+                            <input id="sftpPort" type="number" min="1" max="65535" step="1" class="text-input" @bind="sftpPort" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sftpUser">Username</label>
+                            <input id="sftpUser" type="text" class="text-input" @bind="sftpUser" placeholder="media" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sftpPassword">Password</label>
+                            <input id="sftpPassword" type="password" class="text-input" @bind="sftpPassword" placeholder="••••••••" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sftpRemotePath">Remote path</label>
+                            <div class="input-row">
+                                <input id="sftpRemotePath" type="text" class="text-input" @bind="sftpRemotePath" placeholder="/media/movies/" />
+                                <button class="btn btn-icon" title="Browse remote folders" @onclick="OpenSftpBrowser"
+                                        disabled="@(string.IsNullOrWhiteSpace(sftpHost) || string.IsNullOrWhiteSpace(sftpUser))">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <path d="M1.5 4.5C1.5 3.67 2.17 3 3 3h3l1.5 1.5H13c.83 0 1.5.67 1.5 1.5v6c0 .83-.67 1.5-1.5 1.5H3c-.83 0-1.5-.67-1.5-1.5v-7.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <p class="hint">Folder on the server where the .mp4 will be uploaded. Created if it doesn't exist.</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sftpKeyFile">SSH key file (optional)</label>
+                            <input id="sftpKeyFile" type="text" class="text-input" @bind="sftpKeyFile" placeholder="~/.ssh/id_ed25519" />
+                            <p class="hint">If set and the file exists, key-based authentication is used instead of the password.</p>
+                        </div>
+
+                        <div class="form-group">
+                            <button class="btn btn-secondary" @onclick="TestSftpConnection" disabled="@sftpTesting">
+                                @if (sftpTesting)
+                                {
+                                    <div class="spinner spinner-sm"></div>
+                                    <text>Testing…</text>
+                                }
+                                else
+                                {
+                                    <text>Test Connection</text>
+                                }
+                            </button>
+                            @if (!string.IsNullOrEmpty(sftpTestMessage))
+                            {
+                                <span style="margin-left: 1rem;" class="badge @(sftpTestSuccess == true ? "badge-green" : "badge-red") saved-badge">@sftpTestMessage</span>
+                            }
+                        </div>
+                    }
+
+                    @if (postTransferMode is "LocalCopy" or "Both")
+                    {
+                        <hr class="card-divider" />
+                        <h3 class="card-subheading">Local Destination</h3>
+
+                        <div class="form-group">
+                            <label for="localCopyPath">Destination folder</label>
+                            <div class="input-row">
+                                <input id="localCopyPath" type="text" class="text-input" @bind="localCopyPath" placeholder="~/Videos/Converted" />
+                                <button class="btn btn-icon" title="Browse local folders" @onclick="OpenLocalBrowserLocalCopy">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <path d="M1.5 4.5C1.5 3.67 2.17 3 3 3h3l1.5 1.5H13c.83 0 1.5.67 1.5 1.5v6c0 .83-.67 1.5-1.5 1.5H3c-.83 0-1.5-.67-1.5-1.5v-7.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <p class="hint">The finished .mp4 is moved here. Folder is created if it doesn't exist.</p>
+                        </div>
                     }
                 </div>
             }
 
-            @if (postTransferMode is "LocalCopy" or "Both")
-            {
-                <hr class="card-divider" />
-                <h3 class="card-subheading">Local Destination</h3>
-
-                <div class="form-group">
-                    <label for="localCopyPath">Destination folder</label>
-                    <div class="input-row">
-                        <input id="localCopyPath" type="text" class="text-input" @bind="localCopyPath" placeholder="~/Videos/Converted" />
-                        <button class="btn btn-icon" title="Browse local folders" @onclick="OpenLocalBrowserLocalCopy">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                <path d="M1.5 4.5C1.5 3.67 2.17 3 3 3h3l1.5 1.5H13c.83 0 1.5.67 1.5 1.5v6c0 .83-.67 1.5-1.5 1.5H3c-.83 0-1.5-.67-1.5-1.5v-7.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <p class="hint">The finished .mp4 is moved here. Folder is created if it doesn't exist.</p>
-                </div>
-            }
-        </div>
-
-        <div class="settings-actions">
-            <button class="btn btn-primary" @onclick="SaveSettings">Save</button>
-            @if (saved)
-            {
-                <span class="badge badge-green saved-badge">Saved</span>
-            }
+            <div class="settings-actions">
+                <button class="btn btn-primary" @onclick="SaveSettings">Save</button>
+                @if (saved)
+                {
+                    <span class="badge badge-green saved-badge">Saved</span>
+                }
+            </div>
         </div>
     </div>
 
@@ -467,6 +528,13 @@
 </div>
 
 @code {
+    private string activeSection = "tmdb";
+
+    private void SetTmdb() => activeSection = "tmdb";
+    private void SetHandbrake() => activeSection = "handbrake";
+    private void SetAutomation() => activeSection = "automation";
+    private void SetOutput() => activeSection = "output";
+
     private string apiKey = string.Empty;
     private bool autoDetect = true;
     private string outputDir = "~/Videos/Rips";
@@ -476,7 +544,7 @@
     private int maxParallelRips = 0;
     private bool saved;
 
-    private bool useCustom;
+    private bool useCustom = true;
     private List<string> presets = new();
     private string selectedPreset = "Very Fast 1080p30";
     private string selectedEncoder = "x264";
@@ -487,6 +555,7 @@
     private bool chapterMarkers = true;
     private string framerate = "source";
     private bool cfr = false;
+    private bool autoCrop = false;
 
     private string postTransferMode = "None";
     private string sftpHost = string.Empty;
@@ -544,6 +613,7 @@ autoStartRip = settings.AutoStartRip;
             chapterMarkers = settings.HandbrakeMarkers;
             framerate = settings.HandbrakeFramerate ?? "source";
             cfr = settings.HandbrakeCfr;
+            autoCrop = settings.HandbrakeAutoCrop;
 
             postTransferMode = settings.PostTransferMode.ToString();
             sftpHost = settings.SftpHost ?? string.Empty;
@@ -581,6 +651,7 @@ autoStartRip = settings.AutoStartRip;
         SettingsService.Current.HandbrakeMarkers = chapterMarkers;
         SettingsService.Current.HandbrakeFramerate = framerate;
         SettingsService.Current.HandbrakeCfr = cfr;
+        SettingsService.Current.HandbrakeAutoCrop = autoCrop;
 
         SettingsService.Current.PostTransferMode = postTransferMode switch
         {

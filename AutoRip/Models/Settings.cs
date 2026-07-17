@@ -4,7 +4,7 @@ public class Settings
 {
     public string OutputDirectory { get; set; } = "~/Videos/Rips";
     public string HandbrakePreset { get; set; } = "Very Fast 1080p30";
-    public bool UseCustomHandbrake { get; set; } = false;
+    public bool UseCustomHandbrake { get; set; } = true;
     public string? HandbrakeEncoder { get; set; } = "x264";
     public double HandbrakeQuality { get; set; } = 22.0;
     public string? HandbrakeSpeed { get; set; } = "veryfast";
@@ -13,6 +13,7 @@ public class Settings
     public bool HandbrakeMarkers { get; set; } = true;
     public string? HandbrakeFramerate { get; set; } = "source";
     public bool HandbrakeCfr { get; set; } = false;
+    public bool HandbrakeAutoCrop { get; set; } = false;
     public bool AutoDeleteMkv { get; set; } = true;
     public bool AutoEjectAfterRip { get; set; } = true;
     public bool AutoStartRip { get; set; } = false;
