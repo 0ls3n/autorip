@@ -7,7 +7,6 @@ set -euo pipefail
 # ──────────────────────────────────────────────────────────────────────────────
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$REPO_DIR/AutoRip/AutoRip"
 SERVICE_NAME="autorip"
 INSTALL_DIR="/opt/autorip"
 DOTNET_VERSION="10.0"
@@ -229,11 +228,16 @@ echo ""
 
 log "Building AutoRip..."
 
-if [[ ! -f "$PROJECT_DIR/AutoRip.csproj" ]]; then
-    fail "AutoRip.csproj not found at $PROJECT_DIR. Are you running from the repo root?"
+CSPROJ_FILE=$(find "$REPO_DIR" -maxdepth 4 -name 'AutoRip.csproj' -print -quit 2>/dev/null)
+
+if [[ -z "$CSPROJ_FILE" || ! -f "$CSPROJ_FILE" ]]; then
+    fail "AutoRip.csproj not found under $REPO_DIR. Are you running from the repo root?"
 fi
 
-dotnet publish "$PROJECT_DIR/AutoRip.csproj" \
+PROJECT_DIR="$(dirname "$CSPROJ_FILE")"
+log "Found project at $PROJECT_DIR"
+
+dotnet publish "$CSPROJ_FILE" \
     --configuration Release \
     --output "$INSTALL_DIR" \
     -p:PublishSingleFile=false \
